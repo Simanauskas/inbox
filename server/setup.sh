@@ -44,7 +44,7 @@ setenv COMPOSE_PROFILES "$COMPOSE_PROFILES"
 export COMPOSE_PROFILES POSTGRES_PASSWORD
 
 DATA="$PWD/data"
-mkdir -p "$DATA"/{synapse,postgres}
+mkdir -p "$DATA/synapse"
 # Helpers that run inside containers, so file ownership never gets in the way.
 yq() { docker run --rm -i --user root -v "$DATA:/data" -e SERVER_NAME -e MATRIX_HOST -e ADMIN_USER -e POSTGRES_PASSWORD -e DP_TOKEN -e TELEGRAM_API_ID -e TELEGRAM_API_HASH -e BLUEBUBBLES_URL -e BLUEBUBBLES_PASSWORD -e ADMIN_REGEX -e VAPID_PUBLIC_KEY mikefarah/yq:4 "$@"; }
 inside() { docker run --rm -i -v "$DATA:/data" alpine:3 sh -c "$1"; }

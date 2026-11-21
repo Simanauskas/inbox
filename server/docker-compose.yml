@@ -3,6 +3,10 @@
 # Federation is off: nothing outside this machine can talk to it except your
 # app, through the Cloudflare tunnel (or any HTTPS reverse proxy you prefer).
 
+# A fixed project name, so containers and the database volume keep their names
+# whatever folder this is in.
+name: inbox
+
 x-bridge: &bridge
   restart: unless-stopped
   depends_on:
@@ -18,12 +22,16 @@ services:
       POSTGRES_DB: synapse
       POSTGRES_INITDB_ARGS: --encoding=UTF8 --lc-collate=C --lc-ctype=C
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      # Docker's own storage, not a folder on the Mac's disk: Postgres on a
+      # shared Mac folder is very slow (first start took minutes).
+      - pgdata:/var/lib/postgresql/data
       - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-bridges.sh:ro
     healthcheck:
-      test: [CMD, pg_isready, -U, synapse]
+      test: [CMD, pg_isready, -U, synapse, -d, synapse]
       interval: 5s
       retries: 20
+      # first start creates the database; failures during this don't count
+      start_period: 10m
 
   synapse:
     image: ${SYNAPSE_IMAGE:-matrixdotorg/synapse:latest}
@@ -39,6 +47,7 @@ services:
       test: [CMD, curl, -fsS, http://localhost:8008/health]
       interval: 10s
       retries: 30
+      start_period: 10m
 
   whatsapp:
     <<: *bridge
@@ -99,3 +108,6 @@ networks:
     ipam:
       config:
         - subnet: 172.31.250.0/24
+
+volumes:
+  pgdata:

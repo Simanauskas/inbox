@@ -19,8 +19,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 server_dir, hs, user, password = sys.argv[1:5]
-project = Path(server_dir).resolve().name.lower()
-network = f"{project}_default"
+network = "inbox_default"  # compose project is named "inbox"
 b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
 
 

@@ -22,6 +22,12 @@
    (`data/.admin-created`; `ADMIN_PASSWORD` env for non-interactive), then
    `docker compose up -d`.
 
+Compose project is named `inbox` (containers `inbox-…`, network
+`inbox_default`). Postgres data is in the named volume `inbox_pgdata`, not
+`server/data/postgres`: on his MacBook Air (Docker Desktop 4.24, Big Sur) a
+bind-mounted Postgres took ~2.5 min to initialise and failed the health check.
+Postgres and Synapse health checks have `start_period: 10m`.
+
 Compose network subnet is fixed to `172.31.250.0/24` (Synapse refuses private
 addresses for push unless whitelisted). Synapse is published only on
 `127.0.0.1:8008`; the `cloudflared` service (profile `tunnel`) exposes it.

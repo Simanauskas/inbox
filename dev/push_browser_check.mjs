@@ -18,7 +18,6 @@ import path from 'node:path'
 const { chromium } = createRequire(import.meta.url)('playwright')
 const [serverDir, HS, USER, PASS] = process.argv.slice(2)
 const APP = process.env.APP_URL || 'http://localhost:5181'
-const project = path.basename(path.resolve(serverDir)).toLowerCase()
 const assert = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('ok -', m) }
 const b64 = (b) => Buffer.from(b).toString('base64url')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -43,7 +42,7 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(201); self.send_header("Content-Length", "0"); self.end_headers()
 http.server.HTTPServer(("0.0.0.0", 80), H).serve_forever()`
 try { execFileSync('docker', ['rm', '-f', 'mockpush'], { stdio: 'ignore' }) } catch {}
-execFileSync('docker', ['run', '-d', '--name', 'mockpush', '--network', `${project}_default`, '-v', `${path.resolve(inbox)}:/out`, 'python:3-alpine', 'python', '-c', receiver])
+execFileSync('docker', ['run', '-d', '--name', 'mockpush', '--network', 'inbox_default', '-v', `${path.resolve(inbox)}:/out`, 'python:3-alpine', 'python', '-c', receiver])
 
 // the subscription the browser will "get" from its push service
 const ecdh = createECDH('prime256v1'); ecdh.generateKeys()

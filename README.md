@@ -169,8 +169,15 @@ protocols. If a bridge stops working, updating usually fixes it.
 
 ## Backups
 
-Everything is in `server/data/` (database, configs, media). Back up that
-folder, or at least `docker compose exec postgres pg_dumpall -U synapse`.
+Configs, keys and media are in `server/data/`. The database lives in Docker's
+own storage (volume `inbox_pgdata`, much faster than a folder on a Mac). Back
+up both:
+
+```bash
+cd server && docker compose exec -T postgres pg_dumpall -U synapse > backup.sql
+```
+
+and copy `server/data/` (plus `server/.env`) somewhere safe.
 
 ---
 

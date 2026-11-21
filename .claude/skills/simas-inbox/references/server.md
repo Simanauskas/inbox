@@ -59,7 +59,7 @@ registrations with the same id), Postgres DB per bridge,
 `homeserver.websocket_proxy: null`; database **SQLite only**
 (`sqlite3-fk-wal`, `file:/data/mautrix-imessage.db?_txlock=immediate` — on
 Postgres its schema fails with `syntax error at or near "NEW"`);
-`bridge.user = @s:…`;
+`bridge.user = @s:…`; registration `url` is set by setup.sh to `http://imessage:29331` (the bridge drops `appservice.address`, leaving url empty → Synapse `M_URL_NOT_SET`); setup.sh restarts Synapse on re-runs so it reloads registrations;
 `bridge.displayname_template: "{{.}}"` (the default adds " (iMessage)", which
 breaks name matching); `backfill.initial_limit 1000`, `initial_sync_max_age 90`
 days. It has **no `as_token:` double puppeting** — uses

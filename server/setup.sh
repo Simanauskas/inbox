@@ -171,8 +171,10 @@ for b in $BRIDGES; do
   if [ "$b" = imessage ]; then
     # lets the iMessage bridge post the messages you send from your iPhone as you
     export ADMIN_REGEX="^@$ADMIN_USER:$(printf '%s' "$SERVER_NAME" | sed 's/\./\\./g')\$"
+    # and tells Synapse where the bridge is: this older bridge drops `appservice.address`
+    # from its config, so the registration it writes has no URL
     yq -i \
-      '.namespaces.users += [{"regex": strenv(ADMIN_REGEX), "exclusive": false}] | .namespaces.users |= unique_by(.regex)' \
+      '.url = "http://imessage:29331" | .namespaces.users += [{"regex": strenv(ADMIN_REGEX), "exclusive": false}] | .namespaces.users |= unique_by(.regex)' \
       /data/synapse/imessage-registration.yaml
   fi
   regs="$regs, \"/data/$b-registration.yaml\""
@@ -245,7 +247,14 @@ yq -i "
 
 # --- Start -----------------------------------------------------------------
 say "Starting the database and Matrix server"
+synapse_was_running=$(docker compose ps -q synapse 2>/dev/null || true)
 docker compose up -d --wait postgres synapse
+if [ -n "$synapse_was_running" ]; then
+  # Synapse reads the bridges' registrations only when it starts
+  say "Restarting the Matrix server to load the bridge settings"
+  docker compose restart synapse
+  docker compose up -d --wait synapse
+fi
 
 if [ ! -f "$DATA/.admin-created" ]; then
   say "Creating your account @$ADMIN_USER:$SERVER_NAME"

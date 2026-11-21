@@ -123,6 +123,7 @@ bridgev2_config() {
 }
 
 # iMessage uses the older mautrix layout and talks to the BlueBubbles server app on the Mac.
+# Its database must be SQLite: the bridge's schema doesn't work on Postgres.
 imessage_config() {
   echo '
     .homeserver.address = "http://synapse:8008" |
@@ -133,8 +134,8 @@ imessage_config() {
     .appservice.port = 29331 |
     .appservice.id = "imessage" |
     .appservice.bot.username = "imessagebot" |
-    .appservice.database.type = "postgres" |
-    .appservice.database.uri = "postgres://synapse:" + strenv(POSTGRES_PASSWORD) + "@postgres/imessage?sslmode=disable" |
+    .appservice.database.type = "sqlite3-fk-wal" |
+    .appservice.database.uri = "file:/data/mautrix-imessage.db?_txlock=immediate" |
     .imessage.platform = "bluebubbles" |
     .imessage.bluebubbles_url = strenv(BLUEBUBBLES_URL) |
     .imessage.bluebubbles_password = strenv(BLUEBUBBLES_PASSWORD) |

@@ -56,7 +56,10 @@ registrations with the same id), Postgres DB per bridge,
 **iMessage (mautrix-imessage, legacy layout)** with `imessage.platform: bluebubbles`,
 `bluebubbles_url` (default `http://host.docker.internal:1234`; compose adds
 `extra_hosts: host.docker.internal:host-gateway`) and `bluebubbles_password`;
-`homeserver.websocket_proxy: null`; `bridge.user = @s:…`;
+`homeserver.websocket_proxy: null`; database **SQLite only**
+(`sqlite3-fk-wal`, `file:/data/mautrix-imessage.db?_txlock=immediate` — on
+Postgres its schema fails with `syntax error at or near "NEW"`);
+`bridge.user = @s:…`;
 `bridge.displayname_template: "{{.}}"` (the default adds " (iMessage)", which
 breaks name matching); `backfill.initial_limit 1000`, `initial_sync_max_age 90`
 days. It has **no `as_token:` double puppeting** — uses

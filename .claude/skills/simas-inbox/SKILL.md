@@ -1,0 +1,95 @@
+---
+name: "simas-inbox"
+description: Simas Simanauskas's own unified messaging app "Inbox" (repo Simanauskas/inbox, app at inbox.simas.fit, Matrix server matrix.simas.fit) — one thread per person merging his WhatsApp, Telegram, Messenger, Instagram and iMessage chats through a self-hosted Matrix (Synapse) server with mautrix bridges, BlueBubbles for iMessage and Sygnal for push notifications. Use whenever he mentions Inbox, inbox.simas.fit, matrix.simas.fit, combining/merging his chats or messaging apps, a person's default channel or "reply on the app they wrote from", connecting or logging in to WhatsApp/Telegram/Messenger/Instagram/iMessage bridges, BlueBubbles, Sygnal or push notifications for Inbox, setup.sh / docker compose for the messaging server, the MacBook Air or Mac mini that runs it, the Cloudflare tunnel "inbox", or a bridge that stopped working, messages not arriving, or a person showing up twice — even if he doesn't say "Inbox". Not for email or iCloud mail sorting (icloud-mail-rules) or his training dashboard (simas-fit-update).
+---
+
+# Inbox — one thread per person across all his messaging apps
+
+Built 21 Nov 2026. He wanted one ad-free app for WhatsApp, Telegram,
+Messenger, Instagram and iMessage, where each **person** is one thread with
+all their history, new messages go to that person's **default app**, and
+replies go back on **the app they last wrote from**. Viber was dropped (no
+workable bridge). He looked at Beeper (merged chats are on its $9.99/month
+plan) and chose to self-host instead.
+
+Repo: **`Simanauskas/inbox`** (private; `main` deploys the app). It started
+in `Simanauskas/dashboard/inbox` and was moved with its history — nothing for
+it lives in `dashboard` any more.
+
+| Thing | Where |
+|---|---|
+| Web app (React + Vite, home-screen PWA) | `app/` → Cloudflare Pages, root dir `app`, branch `main`, env `VITE_HOMESERVER=https://matrix.simas.fit`, domain `inbox.simas.fit` |
+| Server (Docker compose) | `server/` — `docker-compose.yml`, `setup.sh`, `.env.example`, `postgres-init.sh` |
+| Local test server + mock bridge + tests | `dev/` |
+| Guide for him | `README.md` (setup steps 1–5, updating, backups) |
+| His account | **`@s:matrix.simas.fit`** (username `s`; server name can't change later) |
+| Public address | Cloudflare Tunnel **`inbox`**, public hostname `matrix.simas.fit` → service URL **`http://synapse:8008`** (the form needs the `http://` prefix) |
+
+## Architecture
+
+```
+app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ WhatsApp / Telegram / Messenger / Instagram
+                            │     ◀─▶ mautrix-imessage ─▶ BlueBubbles app on the Mac ─▶ iMessage
+                            └─▶ Sygnal ─▶ Apple / Google web push ─▶ phone
+```
+
+- **No backend of its own.** The app is a thin Matrix client (`app/src/matrix.js`:
+  sync loop, pagination, send/upload, authenticated media as blob URLs). Rooms
+  are unencrypted (own server, bridges encryption off), so there's no crypto.
+- **Federation is off** (`federation_domain_whitelist: []`, listener only serves
+  `client`). Registration off. Every invite is auto-accepted by the app (only the
+  bridges can invite).
+- **People are client-side.** `app/src/people.js` (pure, unit-tested) turns rooms
+  into inbox items. Which rooms belong to which person is saved in Matrix
+  **account data `fit.simas.inbox.people`**, so every device agrees:
+  `{version, people: {pid: {name, rooms: [roomId], defaultRoom}}, dismissed: [roomsKey], replyWindowHours: 12}`.
+  Rooms not in any person are shown as their own entry.
+- **Room kinds**: `dm` / `group` / `connection` (bridge-bot chats, shown in
+  Settings) / `space` (hidden). From `m.bridge` state: `com.beeper.room_type.v2`
+  (`dm`, `group_dm`→group, `space`), else `com.beeper.room_type`, else iMessage's
+  `channel['fi.mau.imessage.is_group']`, else member heuristics.
+- **Merge suggestions**: same normalised name (diacritics folded: Eglė = Egle,
+  `mantas_j` = `Mantas J.`) or same phone number in the ghost user id. He
+  confirms each with "Combine" / "Not the same person".
+
+### Which app a message goes out on (`chooseChannel`)
+
+1. a channel he picked by hand in this thread (sticks until they write from another app)
+2. where they last wrote to him, if within `replyWindowHours` (default 12 h, Settings)
+3. the person's default app
+4. where they last wrote / last used
+
+Replying to a specific message always goes to that message's room. The
+composer shows "Sending via <app> ▾" plus the reason.
+
+## Status (as of 21 Nov 2026)
+
+Done by him: Cloudflare Tunnel + public hostname, Cloudflare Pages project
+(was pointed at the old dashboard branch — must point at `Simanauskas/inbox`,
+`main`, root `app`), username `s`. Telegram API keys: told how (my.telegram.org/apps).
+
+Server hardware: a **MacBook Air (13", mid 2013, 4 GB, Intel)** being upgraded
+from High Sierra to **Big Sur 11** (newest it supports — the App Store offering
+Sequoia won't install). Plan: **Docker Desktop 4.24.2** (or 4.22; last ones for
+Big Sur, no updates) with memory set to 2 GB, then `./setup.sh`, BlueBubbles
+on the same Mac. 4 GB is tight; if it struggles, move `server/data` to a
+€4.50 Hetzner server and keep the Mac only for BlueBubbles. He's also
+considering a used **Mac mini — recommend M1/M2 with 16 GB** (M1 8 GB is
+enough for Inbox alone; avoid Intel 2018 and older).
+
+Not built yet: starting a brand-new chat from the app (use the bridge bot's
+commands), recording voice messages. Real bridges have never run against his
+accounts yet — expect small fixes on first run.
+
+## Working on it
+
+- Work in a clone of `Simanauskas/inbox`; pushing `main` redeploys the app.
+- Read `references/server.md` before touching `server/` or helping with setup,
+  bridge logins or a bridge that misbehaves.
+- Read `references/push.md` before touching notifications.
+- Read `references/testing.md` before running or changing tests (the dev
+  server, mock bridge, and the cloud-container quirks).
+- After changing `app/src/people.js` run `npm test` in `app/`; after UI or
+  client changes also run `dev/e2e.mjs`.
+- Explain things to him in plain words; he's technical enough to run
+  commands but isn't a developer. Give commands in separate copyable blocks.

@@ -46,7 +46,7 @@ export COMPOSE_PROFILES POSTGRES_PASSWORD
 DATA="$PWD/data"
 mkdir -p "$DATA"/{synapse,postgres}
 # Helpers that run inside containers, so file ownership never gets in the way.
-yq() { docker run --rm -i --user root -v "$DATA:/data" -e SERVER_NAME -e MATRIX_HOST -e ADMIN_USER -e POSTGRES_PASSWORD -e DP_TOKEN -e TELEGRAM_API_ID -e TELEGRAM_API_HASH -e BLUEBUBBLES_URL -e BLUEBUBBLES_PASSWORD -e ADMIN_REGEX mikefarah/yq:4 "$@"; }
+yq() { docker run --rm -i --user root -v "$DATA:/data" -e SERVER_NAME -e MATRIX_HOST -e ADMIN_USER -e POSTGRES_PASSWORD -e DP_TOKEN -e TELEGRAM_API_ID -e TELEGRAM_API_HASH -e BLUEBUBBLES_URL -e BLUEBUBBLES_PASSWORD -e ADMIN_REGEX -e VAPID_PUBLIC_KEY mikefarah/yq:4 "$@"; }
 inside() { docker run --rm -i -v "$DATA:/data" alpine:3 sh -c "$1"; }
 
 # --- Synapse ---------------------------------------------------------------
@@ -177,6 +177,53 @@ for b in $BRIDGES; do
   regs="$regs, \"/data/$b-registration.yaml\""
 done
 
+# --- Push notifications -----------------------------------------------------
+# Sygnal turns Synapse's notifications into Web Push messages for the app.
+SYGNAL_IMAGE=${SYGNAL_IMAGE:-matrixdotorg/sygnal:latest}
+mkdir -p "$DATA/sygnal"
+if [ ! -f "$DATA/sygnal/vapid_private_key.pem" ]; then
+  say "Generating the push notification keys"
+  docker run --rm -v "$DATA/sygnal:/data" --entrypoint python "$SYGNAL_IMAGE" -c '
+from py_vapid import Vapid02, b64urlencode
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+v = Vapid02()
+v.generate_keys()
+v.save_key("/data/vapid_private_key.pem")
+raw = v.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+open("/data/vapid_public_key.txt", "w").write(b64urlencode(raw))
+'
+fi
+VAPID_PUBLIC_KEY=$(cat "$DATA/sygnal/vapid_public_key.txt")
+export VAPID_PUBLIC_KEY
+PUSH_CONTACT_EMAIL=${PUSH_CONTACT_EMAIL:-push@$SERVER_NAME}
+extra_endpoint=""
+[ -n "${PUSH_EXTRA_ENDPOINT:-}" ] && extra_endpoint="      - \"$PUSH_EXTRA_ENDPOINT\""
+inside 'cat > /data/sygnal/sygnal.yaml' <<SYGNAL
+log:
+  setup:
+    version: 1
+    formatters: {normal: {format: "%(asctime)s %(levelname)-5s %(name)s %(message)s"}}
+    handlers: {stderr: {class: logging.StreamHandler, formatter: normal, stream: "ext://sys.stderr"}}
+    root: {handlers: [stderr], level: INFO}
+    disable_existing_loggers: false
+  access: {x_forwarded_for: false}
+http:
+  bind_addresses: ["0.0.0.0"]
+  port: 5000
+apps:
+  fit.simas.inbox.web:
+    type: webpush
+    vapid_private_key: /data/vapid_private_key.pem
+    vapid_contact_email: "$PUSH_CONTACT_EMAIL"
+    # only ever deliver to the browsers' real push services
+    allowed_endpoints:
+      - "web.push.apple.com"
+      - "fcm.googleapis.com"
+      - "updates.push.services.mozilla.com"
+      - "*.notify.windows.com"
+$extra_endpoint
+SYGNAL
+
 say "Configuring Synapse"
 yq -i "
   .database = {\"name\": \"psycopg2\", \"args\": {\"user\": \"synapse\", \"password\": strenv(POSTGRES_PASSWORD), \"database\": \"synapse\", \"host\": \"postgres\", \"cp_min\": 5, \"cp_max\": 10}} |
@@ -190,7 +237,9 @@ yq -i "
   .enable_authenticated_media = true |
   .max_upload_size = \"100M\" |
   .url_preview_enabled = false |
-  .app_service_config_files = [$regs]
+  .app_service_config_files = [$regs] |
+  .ip_range_whitelist = [\"172.31.250.0/24\"] |
+  .extra_well_known_client_content = {\"fit.simas.inbox.push\": {\"app_id\": \"fit.simas.inbox.web\", \"gateway_url\": \"http://sygnal:5000/_matrix/push/v1/notify\", \"vapid_public_key\": strenv(VAPID_PUBLIC_KEY)}}
 " /data/synapse/homeserver.yaml
 
 # --- Start -----------------------------------------------------------------
@@ -218,6 +267,7 @@ Done. Your Matrix server is running.
     Server:   https://$MATRIX_HOST
     Username: $ADMIN_USER
 
-  Then open Settings → Connected apps to log in to each chat app.
-  Logs: docker compose logs -f <service>   (synapse, ${BRIDGES// /, })
+  Then open Settings → Connected apps to log in to each chat app,
+  and Settings → Notifications to get notified when the app is closed.
+  Logs: docker compose logs -f <service>   (synapse, sygnal${BRIDGES:+, ${BRIDGES// /, }})
 EOF

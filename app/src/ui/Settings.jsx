@@ -1,8 +1,44 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { go, back } from '../router.js'
 import { PEOPLE_TYPE } from '../matrix.js'
 import { normConfig } from '../people.js'
+import { pushState, enablePush, disablePush } from '../push.js'
 import { NetBadge, TopBar } from './common.jsx'
+
+function Notifications({ client }) {
+  const [state, setState] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const refresh = () => pushState(client).then(setState)
+  useEffect(() => { refresh() }, [])
+
+  async function run(fn) {
+    setBusy(true)
+    setErr(null)
+    try { await fn(client) } catch (e) { setErr(e.message) }
+    setBusy(false)
+    refresh()
+  }
+
+  if (state === null) return <div className="card"><span className="spinner small" /></div>
+  return (
+    <div className="card">
+      {state === 'on' && <>
+        <p>✓ On. You'll be notified of new messages even when Inbox is closed.</p>
+        <button className="wide-btn" disabled={busy} onClick={() => run(disablePush)}>Turn off</button>
+      </>}
+      {state === 'off' && <>
+        <p>Get notified of new messages even when Inbox is closed.</p>
+        <button className="wide-btn" disabled={busy} onClick={() => run(enablePush)}>{busy ? 'Turning on…' : 'Turn on notifications'}</button>
+      </>}
+      {state === 'install' && <p>On iPhone, notifications only work for apps on the Home Screen: tap <b>Share</b> → <b>Add to Home Screen</b>, open Inbox from there, then come back here.</p>}
+      {state === 'denied' && <p>Notifications are blocked for Inbox. Allow them in your phone's or browser's settings, then come back here.</p>}
+      {state === 'unconfigured' && <p className="muted">Your server doesn't have push notifications set up yet. Run <code>./setup.sh</code> again on the server to add them.</p>}
+      {state === 'unsupported' && <p className="muted">This browser doesn't support push notifications.</p>}
+      {err && <p className="error">{err}</p>}
+    </div>
+  )
+}
 
 // bot user names the server setup script gives each bridge
 const BRIDGES = [
@@ -17,7 +53,6 @@ const WINDOWS = [1, 3, 6, 12, 24, 48, 168]
 export default function Settings({ ctx }) {
   const { client, model, onLogout } = ctx
   const cfg = normConfig(client.accountData[PEOPLE_TYPE])
-  const [perm, setPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
   const [busy, setBusy] = useState(null)
   const [err, setErr] = useState(null)
   const server = client.userId.split(':').slice(1).join(':')
@@ -55,11 +90,7 @@ export default function Settings({ ctx }) {
         </div>
 
         <h3 className="section">Notifications</h3>
-        <div className="card">
-          {perm === 'granted' ? <p>On while the app is open in the background.</p>
-            : perm === 'unsupported' ? <p className="muted">This browser doesn't support notifications. On iPhone, add Inbox to your Home Screen first.</p>
-            : <button className="wide-btn" onClick={() => Notification.requestPermission().then(setPerm)}>Turn on notifications</button>}
-        </div>
+        <Notifications client={client} />
 
         <h3 className="section">Connected apps</h3>
         <p className="hint">Each app is connected through a bridge bot on your server. Open one and follow its instructions to log in.</p>
@@ -86,7 +117,7 @@ export default function Settings({ ctx }) {
         <div className="card">
           <p>Signed in as <b>{client.userId}</b></p>
           <p className="muted small">{client.baseUrl}</p>
-          <button className="wide-btn danger" onClick={async () => { await client.logout(); onLogout() }}>Sign out</button>
+          <button className="wide-btn danger" onClick={async () => { await disablePush(client).catch(() => {}); await client.logout(); onLogout() }}>Sign out</button>
         </div>
       </div>
     </div>

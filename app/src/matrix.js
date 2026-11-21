@@ -321,6 +321,7 @@ export class Client {
     room.receipts[this.userId] = last.event_id
     room.notificationCount = 0
     this.emit()
+    this.onRead?.(roomId)
     await this.api('POST', `/_matrix/client/v3/rooms/${enc(roomId)}/read_markers`, {
       'm.fully_read': last.event_id, 'm.read': last.event_id,
     }).catch(() => {})
@@ -341,6 +342,15 @@ export class Client {
   async createDM(userId) {
     const res = await this.api('POST', '/_matrix/client/v3/createRoom', { preset: 'trusted_private_chat', invite: [userId], is_direct: true })
     return res.room_id
+  }
+
+  // --- push ---
+  setPusher(body) {
+    return this.api('POST', '/_matrix/client/v3/pushers/set', body)
+  }
+
+  setPushRuleEnabled(kind, ruleId, enabled) {
+    return this.api('PUT', `/_matrix/client/v3/pushrules/global/${kind}/${enc(ruleId)}/enabled`, { enabled })
   }
 
   logout() {

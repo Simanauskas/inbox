@@ -119,3 +119,17 @@ test('iMessage: is_group flag and escaped phone numbers', async () => {
   assert.equal(m.info.a.phone, '37061234567')
   assert.equal(m.info.b.kind, 'group')
 })
+
+test('push payload becomes a readable notification', async () => {
+  await import('../public/push-notify.js')
+  const { notificationFromPush } = globalThis.InboxPush
+  const dm = notificationFromPush({ room_id: '!r:x', event_id: '$e', sender_display_name: 'Rokas', room_name: 'Rokas', content: { msgtype: 'm.text', body: '> <@a:x> hi\n\nSauna at 7?' } })
+  assert.equal(dm.title, 'Rokas')
+  assert.equal(dm.options.body, 'Sauna at 7?')
+  assert.equal(dm.options.tag, '!r:x')
+  assert.equal(dm.options.data.hash, '#/t/' + encodeURIComponent('r:!r:x'))
+  const grp = notificationFromPush({ room_id: '!g:x', sender_display_name: 'Ilona', room_name: 'Hyrox crew', content: { msgtype: 'm.image', body: 'x.jpg' } })
+  assert.equal(grp.title, 'Ilona · Hyrox crew')
+  assert.equal(grp.options.body, '📷 Photo')
+  assert.equal(notificationFromPush({ type: 'm.room.member', sender: '@whatsappbot:x', content: { membership: 'invite' } }).options.body, 'New chat')
+})

@@ -9,6 +9,7 @@ import Person from './ui/Person.jsx'
 import Merge from './ui/Merge.jsx'
 import Settings from './ui/Settings.jsx'
 import Search from './ui/Search.jsx'
+import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from './push.js'
 
 const SESSION_KEY = 'inbox.session'
 
@@ -21,7 +22,7 @@ export default function App() {
   if (!session) {
     return <Login onLogin={(s) => { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)) } catch {} setSession(s) }} />
   }
-  return <Main key={session.accessToken} session={session} onLogout={() => { try { localStorage.removeItem(SESSION_KEY) } catch {} setSession(null) }} />
+  return <Main key={session.accessToken} session={session} onLogout={() => { try { localStorage.removeItem(SESSION_KEY) } catch {} saveSessionForWorker(null); setSession(null) }} />
 }
 
 function useHashRoute() {
@@ -69,24 +70,32 @@ function Main({ session, onLogout }) {
     return roomId ? model.items.find((i) => i.rooms.includes(roomId)) || null : null
   }, [model])
 
-  // desktop notifications while the app is open but in the background
   useEffect(() => {
     client.onLoggedOut = onLogout
+    // push: let the service worker see the session, keep the subscription fresh,
+    // clear notifications for what you've read, and open the chat a notification was for
+    saveSessionForWorker(session)
+    syncPush(client)
+    client.onRead = (roomId) => closeNotifications([roomId])
+    const onSwMessage = (e) => { if (e.data?.type === 'open' && e.data.hash) location.hash = e.data.hash }
+    navigator.serviceWorker?.addEventListener('message', onSwMessage)
+    // notifications while the app is open but in the background (push covers it when on)
     client.onMessage = (room, ev) => {
+      if (pushEnabled()) return
       if (document.visibilityState === 'visible' || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
       const m = buildModel(client.rooms, client.accountData, client.userId, client.accountData[PEOPLE_TYPE])
       const item = m.items.find((i) => i.rooms.includes(room.id))
       if (!item) return
       const title = `${item.name} · ${networkInfo(m.info[room.id].network).name}`
       navigator.serviceWorker?.getRegistration().then((reg) => {
-        const opts = { body: previewText(ev, client.userId), tag: item.key, data: { hash: `#/t/${encodeURIComponent(item.key)}` } }
+        const opts = { body: previewText(ev, client.userId), tag: room.id, data: { hash: `#/t/${encodeURIComponent(item.key)}` } }
         if (reg) reg.showNotification(title, opts)
         else new Notification(title, opts)
       })
     }
     client.start()
-    return () => client.stop()
-  }, [client, onLogout])
+    return () => { client.stop(); navigator.serviceWorker?.removeEventListener('message', onSwMessage) }
+  }, [client, onLogout, session])
 
   const totalUnread = model.items.reduce((s, i) => s + i.unread, 0)
   useEffect(() => {

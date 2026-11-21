@@ -1,7 +1,12 @@
-// App-shell cache so the inbox opens instantly and offline. Matrix traffic is
-// on another origin and is never cached here.
-const CACHE = 'inbox-v1'
-self.addEventListener('install', (e) => { self.skipWaiting() })
+// Service worker: app-shell cache (so the inbox opens instantly and offline)
+// and push notifications while the app is closed. Matrix traffic is on another
+// origin and is never cached here.
+importScripts('/push-notify.js')
+
+const CACHE = 'inbox-v2'
+const OLD_MESSAGE_MS = 15 * 60 * 1000
+
+self.addEventListener('install', () => { self.skipWaiting() })
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()))
 })
@@ -16,7 +21,71 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((r) => { const c = r.clone(); caches.open(CACHE).then((ca) => ca.put(e.request, c)); return r })))
   }
 })
+
+// --- push ---
+
+self.addEventListener('push', (e) => {
+  let p = {}
+  try { p = e.data ? e.data.json() : {} } catch {}
+  e.waitUntil(handlePush(p))
+})
+
+async function handlePush(p) {
+  if (typeof p.unread === 'number' && self.navigator.setAppBadge) {
+    await (p.unread ? self.navigator.setAppBadge(p.unread) : self.navigator.clearAppBadge()).catch(() => {})
+  }
+  // Bridges import old history as if it were new. Fold anything older than a
+  // few minutes into one silent notification instead of buzzing for each.
+  // (Browsers require a visible notification for every push, so it can't be dropped.)
+  const age = await eventAge(p)
+  if (age !== null && age > OLD_MESSAGE_MS) {
+    return self.registration.showNotification('Inbox', {
+      body: 'Importing older messages…', tag: 'inbox-import', silent: true, icon: '/icon-192.png', data: { hash: '' },
+    })
+  }
+  const n = self.InboxPush.notificationFromPush(p)
+  return self.registration.showNotification(n.title, n.options)
+}
+
+// How old the event is, using the session the app saved for us; null if unknown.
+async function eventAge(p) {
+  if (!p.room_id || !p.event_id) return null
+  try {
+    const s = await idbGet('session')
+    if (!s) return null
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 4000)
+    const r = await fetch(`${s.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(p.room_id)}/event/${encodeURIComponent(p.event_id)}`, {
+      headers: { Authorization: `Bearer ${s.accessToken}` }, signal: ctrl.signal,
+    })
+    clearTimeout(timer)
+    if (!r.ok) return null
+    const ev = await r.json()
+    return ev.origin_server_ts ? Date.now() - ev.origin_server_ts : null
+  } catch { return null }
+}
+
+function idbGet(key) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('inbox', 1)
+    req.onupgradeneeded = () => req.result.createObjectStore('kv')
+    req.onerror = () => resolve(null)
+    req.onsuccess = () => {
+      try {
+        const get = req.result.transaction('kv').objectStore('kv').get(key)
+        get.onsuccess = () => resolve(get.result || null)
+        get.onerror = () => resolve(null)
+      } catch { resolve(null) }
+    }
+  })
+}
+
 self.addEventListener('notificationclick', (e) => {
   e.notification.close()
-  e.waitUntil(self.clients.matchAll({ type: 'window' }).then((cs) => (cs[0] ? cs[0].focus() : self.clients.openWindow('/' + (e.notification.data?.hash || '')))))
+  const hash = e.notification.data?.hash || ''
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+    const c = cs[0]
+    if (c) { c.postMessage({ type: 'open', hash }); return c.focus() }
+    return self.clients.openWindow('/' + hash)
+  }))
 })

@@ -72,6 +72,16 @@ services:
     extra_hosts: [host.docker.internal:host-gateway]
     profiles: [imessage]
 
+  # Push gateway: turns Synapse's notifications into Web Push messages, so the
+  # app notifies you even when it's closed.
+  sygnal:
+    image: ${SYGNAL_IMAGE:-matrixdotorg/sygnal:latest}
+    restart: unless-stopped
+    environment:
+      SYGNAL_CONF: /data/sygnal.yaml
+    volumes:
+      - ./data/sygnal:/data
+
   # Publishes Synapse at https://<MATRIX_HOST> without opening any ports.
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -81,3 +91,11 @@ services:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
     depends_on: [synapse]
     profiles: [tunnel]
+
+networks:
+  default:
+    # A fixed range, so Synapse can be allowed to reach the push gateway on it
+    # (it refuses private addresses by default).
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24

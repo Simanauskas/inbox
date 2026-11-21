@@ -141,6 +141,23 @@ and replies.
 BlueBubbles' Cloudflare option, copy its URL into `BLUEBUBBLES_URL` in `.env`,
 and run `./setup.sh` again.
 
+## 5. Notifications
+
+`setup.sh` also runs a push gateway (Sygnal) next to the Matrix server. It
+sends new messages to your phone through Apple's or Google's push service, so
+you're notified even when Inbox is closed. Its keys are generated
+automatically, and the app finds them by itself.
+
+- **iPhone (iOS 16.4+):** open Inbox in Safari → Share → **Add to Home Screen**,
+  open it *from the Home Screen*, then Settings → **Turn on notifications**.
+  iPhones only allow notifications for Home Screen web apps.
+- **Android / desktop:** Settings → **Turn on notifications**.
+
+Tapping a notification opens that person's thread, and the app icon shows the
+unread count. Bridges import old history when you connect an app; those old
+messages don't buzz one by one but show as a single silent "Importing older
+messages…" notification. Invites to newly imported chats don't notify at all.
+
 ## Updating
 
 ```bash
@@ -169,11 +186,18 @@ node ../dev/e2e.mjs          # browser test of the whole flow (needs the dev ser
 python3 dev/mockbridge.py say whatsapp rokas "hello"   # fake an incoming message
 ```
 
+Push notifications need the full server (Sygnal isn't in the dev setup). Run
+`server/setup.sh` in a scratch copy with `PUSH_EXTRA_ENDPOINT=mockpush` in its
+`.env`, then:
+
+```bash
+python3 dev/push_check.py <server dir> http://localhost:8008 s <password>        # server → Sygnal → push service, decrypted
+npm run build && npm run preview -- --port 5181                                 # in app/
+node dev/push_browser_check.mjs <server dir> http://localhost:8008 s <password> # app side: subscribe, notifications, clearing
+```
+
 ## Not done yet
 
-- **Push notifications when the app is closed.** Right now you get
-  notifications only while it's open in the background. Next step: a
-  push gateway (Sygnal) on the server plus Web Push in the app.
 - **Starting a brand-new chat** with someone you've never messaged on that
   app. For now you can do it from the bridge bot (`help` lists the commands).
 - **Voice message recording**. Playing voice messages works; recording them doesn't yet.

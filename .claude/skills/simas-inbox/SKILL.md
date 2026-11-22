@@ -68,17 +68,25 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
 Replying to a specific message always goes to that message's room. The
 composer shows "Sending via <app> ▾" plus the reason.
 
-## Status (as of 22 Nov 2026)
+## Status (as of 22 Nov 2026, evening)
 
-**Live.** Running on a **MacBook Air (13", mid 2013, 4 GB, Intel), macOS Big
-Sur, Docker Desktop 4.24.2 with 2 GB**, in `~/Downloads/inbox-main/server`
-(the Mac's user is `ilonaradaviciute`). Cloudflare Tunnel and Pages
-(`Simanauskas/inbox`, `main`, root `app`) are set up; he signs in as `s`.
-WhatsApp, Telegram, Messenger, Instagram connected and imported overnight
-(Postgres wrote ~4.6 GB; while importing, Synapse sat at 100% of one core).
-iMessage bridge runs against BlueBubbles Server 1.9.12 on the same Mac.
-He updates server files by downloading single files from GitHub ("Download
-raw file") into that folder and re-running `./setup.sh`.
+**Live on a VPS: Hostika.lt VX3** (Lithuania; 6 vCPU, 10 GB, 100 GB NVMe,
+Ubuntu 24.04), IP **38.210.227.208**, hostname inbox.simas.fit. Server folder
+**`/root/server`** (moved with `move.sh`; logins, chats and account data came
+along). SSH is key-only (`/etc/ssh/sshd_config.d/00-inbox.conf`), his key is
+the Air's `~/.ssh/id_ed25519`. Nightly `backup.sh` at 04:17 into
+`/root/server/backups`. Cloudflare tunnel `inbox` now connects from the VPS.
+
+The **MacBook Air (2013, Big Sur, Docker Desktop 4.24.2)** now only runs
+BlueBubbles Server 1.9.12 + the `inbox-mac` tunnel (`~/inbox-mac`,
+`bb.simas.fit` → `http://host.docker.internal:1234`, WAF rule: only the VPS IP
+may reach bb.simas.fit). Its old server in `~/Downloads/inbox-main/server`
+is stopped and must stay stopped. VPS `.env` has
+`BLUEBUBBLES_URL=https://bb.simas.fit`.
+
+Gotchas from the move: the Air had no SSH key at first; disabling password
+login before testing the key locked him out (fixed by Hostika "Reinstall").
+Always test with `ssh -o PasswordAuthentication=no ... 'echo KEY WORKS'` first.
 
 **Moving to a VPS (22 Nov 2026):** the Air was too slow ("everything takes
 too long"). Cherry Servers and Hetzner weren't selling; OVH only offered

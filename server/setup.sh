@@ -121,6 +121,7 @@ bridgev2_config() {
     .double_puppet.secrets = {} |
     .double_puppet.secrets[strenv(SERVER_NAME)] = \"as_token:\" + strenv(DP_TOKEN) |
     .encryption.allow = false |
+    .matrix.delivery_receipts = true |
     .backfill.enabled = true |
     .backfill.max_initial_messages = 1000
     $(extra_of "$b")"
@@ -149,6 +150,7 @@ imessage_config() {
     .bridge.login_shared_secret = "appservice" |
     .bridge.personal_filtering_spaces = false |
     .bridge.encryption.allow = false |
+    .bridge.delivery_receipts = true |
     .bridge.backfill.enable = true |
     .bridge.backfill.initial_limit = 1000 |
     .bridge.backfill.initial_sync_max_age = 90'

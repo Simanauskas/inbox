@@ -367,3 +367,29 @@ export function stripReply(body) {
   if (lines[i] === '') i++
   return lines.slice(i).join('\n')
 }
+
+// Where my message has got to: 'sending' | 'failed' | 'sent' (on your server)
+// | 'delivered' (the bridge handed it to WhatsApp etc.: the bridge bot's read
+// receipt) | 'seen' (the other person's read receipt is at or past it).
+export function deliveryStatus(room, ev, me) {
+  if (ev.status === 'sending' || ev.status === 'failed') return ev.status
+  if (!room) return 'sent'
+  const idOf = ev.realId || ev.event_id
+  const idx = room.timeline.findIndex((e) => e.event_id === idOf)
+  if (idx < 0) return 'sent'
+  const bot = room.bridge?.bridgebot
+  let delivered = false
+  for (const [uid, eid] of Object.entries(room.receipts || {})) {
+    if (uid === me) continue
+    const r = room.timeline.findIndex((e) => e.event_id === eid)
+    if (r < idx) continue
+    if (uid === bot || isBotLike(uid)) delivered = true
+    else return 'seen'
+  }
+  return delivered ? 'delivered' : 'sent'
+}
+
+function isBotLike(uid) {
+  const local = uid.slice(1).split(':')[0]
+  return /bot$/.test(local) && !local.includes('_')
+}

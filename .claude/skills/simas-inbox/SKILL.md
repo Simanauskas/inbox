@@ -58,6 +58,16 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   `mantas_j` = `Mantas J.`) or same phone number in the ghost user id. He
   confirms each with "Combine" / "Not the same person".
 
+### Message UI
+- **Press and hold** (or right-click) a message → reaction bar (👍❤️😂😮😢🙏, reply, copy); a tap does nothing.
+- **Ticks** on my messages (`deliveryStatus` in people.js): ✓ on the server, ✓✓ delivered (the bridge
+  bot's read receipt — needs `matrix.delivery_receipts: true` / iMessage `bridge.delivery_receipts: true`,
+  set by setup.sh), "Seen" under my newest message the other person's read receipt covers.
+- The app picker is a small badge (e.g. "WA ▾") at the left of the input row; the menu says why.
+- Notification tap: the service worker stores `pendingOpen` in IndexedDB and the app opens that chat on
+  start/visibility (iOS may launch the PWA without the #hash).
+- Online/last-seen status: not available (bridges don't pass presence; Synapse presence is off).
+
 ### Which app a message goes out on (`chooseChannel`)
 
 1. a channel he picked by hand in this thread (sticks until they write from another app)

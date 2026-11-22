@@ -80,12 +80,35 @@ function idbGet(key) {
   })
 }
 
+function idbSet(key, value) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('inbox', 1)
+    req.onupgradeneeded = () => req.result.createObjectStore('kv')
+    req.onerror = () => resolve()
+    req.onsuccess = () => {
+      try {
+        const tx = req.result.transaction('kv', 'readwrite')
+        tx.objectStore('kv').put(value, key)
+        tx.oncomplete = tx.onerror = () => resolve()
+      } catch { resolve() }
+    }
+  })
+}
+
+// Tapping a notification opens that chat. The chat to open is also written to
+// IndexedDB first: iOS may start the home-screen app without the link's #hash,
+// and the app picks the note up when it starts or comes to the front.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close()
   const hash = e.notification.data?.hash || ''
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+  e.waitUntil((async () => {
+    if (hash) await idbSet('pendingOpen', { hash, at: Date.now() })
+    const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const c = cs[0]
-    if (c) { c.postMessage({ type: 'open', hash }); return c.focus() }
+    if (c) {
+      c.postMessage({ type: 'open', hash })
+      return c.focus()
+    }
     return self.clients.openWindow('/' + hash)
-  }))
+  })())
 })

@@ -10,6 +10,19 @@ import Merge from './ui/Merge.jsx'
 import Settings from './ui/Settings.jsx'
 import Search from './ui/Search.jsx'
 import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from './push.js'
+import { idbGet, idbDel } from './idb.js'
+
+// Open the chat a notification was for (straight into the thread).
+function openFromNotification(hash) {
+  idbDel('pendingOpen')
+  if (location.hash !== hash) location.hash = hash
+}
+
+async function consumePendingOpen() {
+  const p = await idbGet('pendingOpen')
+  if (p && Date.now() - p.at < 2 * 60_000) openFromNotification(p.hash)
+  else if (p) idbDel('pendingOpen')
+}
 
 const SESSION_KEY = 'inbox.session'
 
@@ -77,8 +90,12 @@ function Main({ session, onLogout }) {
     saveSessionForWorker(session)
     syncPush(client)
     client.onRead = (roomId) => closeNotifications([roomId])
-    const onSwMessage = (e) => { if (e.data?.type === 'open' && e.data.hash) location.hash = e.data.hash }
+    const onSwMessage = (e) => { if (e.data?.type === 'open' && e.data.hash) openFromNotification(e.data.hash) }
     navigator.serviceWorker?.addEventListener('message', onSwMessage)
+    // a notification tapped while the app was closed or asleep
+    const onVisible = () => { if (document.visibilityState === 'visible') consumePendingOpen() }
+    document.addEventListener('visibilitychange', onVisible)
+    consumePendingOpen()
     // notifications while the app is open but in the background (push covers it when on)
     client.onMessage = (room, ev) => {
       if (pushEnabled()) return
@@ -94,7 +111,11 @@ function Main({ session, onLogout }) {
       })
     }
     client.start()
-    return () => { client.stop(); navigator.serviceWorker?.removeEventListener('message', onSwMessage) }
+    return () => {
+      client.stop()
+      navigator.serviceWorker?.removeEventListener('message', onSwMessage)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [client, onLogout, session])
 
   const totalUnread = model.items.reduce((s, i) => s + i.unread, 0)

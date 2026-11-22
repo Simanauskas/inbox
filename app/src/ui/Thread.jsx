@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { go, back } from '../router.js'
-import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName } from '../people.js'
+import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus } from '../people.js'
 import { networkInfo } from '../networks.js'
 import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
 
@@ -72,6 +72,14 @@ export default function Thread({ ctx, item }) {
     if (el.scrollTop < 200 && hasMore) loadOlder()
   }
 
+  // "Seen" goes under my newest message that they've read (like Messenger)
+  let lastSeenId = null
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const en = entries[i]
+    if (en.ev.sender !== me) continue
+    if (deliveryStatus(rooms[en.roomId], en.ev, me) === 'seen') { lastSeenId = en.ev.event_id; break }
+  }
+
   const typing = item.rooms.flatMap((id) => (rooms[id]?.typing || []).filter((u) => u !== me).map((u) => ({ u, id })))
   const sub = multi ? item.networks.map((n) => <NetBadge key={n} net={n} />) : <NetBadge net={model.info[item.rooms[0]]?.network} label />
 
@@ -102,8 +110,10 @@ export default function Thread({ ctx, item }) {
               <Bubble
                 ctx={ctx} en={en} mine={en.ev.sender === me} first={first} last={last} showNet={switched} multi={multi}
                 showSender={isGroup && first && en.ev.sender !== me}
+                status={en.ev.sender === me ? deliveryStatus(rooms[en.roomId], en.ev, me) : null}
+                seenHere={en.ev.event_id === lastSeenId}
                 open={active === en.ev.event_id}
-                onToggle={(e) => { e.stopPropagation(); setActive(active === en.ev.event_id ? null : en.ev.event_id) }}
+                onOpen={() => setActive(en.ev.event_id)}
                 onReply={() => { setReplyTo(en); setActive(null) }}
                 onReact={(k) => { client.react(en.roomId, en.ev.event_id, k).catch(() => {}); setActive(null) }}
               />
@@ -131,8 +141,39 @@ function dayLabel(ts) {
   return d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) })
 }
 
-function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, open, onToggle, onReply, onReact }) {
+const TICKS = { sending: '◌', sent: '✓', delivered: '✓✓', seen: '✓✓' }
+const TICK_TITLE = { sending: 'Sending', sent: 'Sent to your server', delivered: 'Delivered', seen: 'Seen' }
+
+// Press and hold (or right-click) a message for reactions and actions, like
+// every other chat app. A plain tap does nothing (tapping a photo opens it).
+function useLongPress(onLong, ms = 420) {
+  const timer = useRef(null)
+  const start = useRef(null)
+  const fired = useRef(false)
+  const clear = () => { clearTimeout(timer.current); timer.current = null }
+  return {
+    onPointerDown: (e) => {
+      if (e.button && e.button !== 0) return
+      fired.current = false
+      start.current = { x: e.clientX, y: e.clientY }
+      clear()
+      timer.current = setTimeout(() => { fired.current = true; navigator.vibrate?.(8); onLong() }, ms)
+    },
+    onPointerMove: (e) => {
+      if (timer.current && start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) clear()
+    },
+    onPointerUp: clear,
+    onPointerCancel: clear,
+    onPointerLeave: clear,
+    onContextMenu: (e) => { e.preventDefault(); clear(); fired.current = true; onLong() },
+    // after a long press, swallow the click that follows (so a photo doesn't open)
+    onClickCapture: (e) => { if (fired.current) { e.stopPropagation(); e.preventDefault(); fired.current = false } },
+  }
+}
+
+function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status, seenHere, open, onOpen, onReply, onReact }) {
   const { client, model } = ctx
+  const press = useLongPress(onOpen)
   const { ev, roomId, reactions } = en
   const room = client.rooms[roomId]
   const net = model.info[roomId]?.network
@@ -146,7 +187,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, open, 
     <div className={`msg ${mine ? 'out' : 'in'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${notice ? 'notice' : ''}`} style={{ '--net': networkInfo(net).color }}>
       {showNet && <div className="msg-net"><NetBadge net={net} label /></div>}
       {showSender && <div className="msg-sender">{cleanName(room?.members[ev.sender]?.displayname || ev.sender)}</div>}
-      <div className="bubble" onClick={onToggle}>
+      <div className={`bubble ${open ? 'pressed' : ''}`} {...press}>
         {replyId && (
           <div className="quote">{quoted ? previewText(quoted, client.userId).replace(/^You: /, '') : 'Replying to an earlier message'}</div>
         )}
@@ -155,9 +196,10 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, open, 
           {ev.edited && 'edited · '}
           {time}
           {multi && <i className="dot" title={networkInfo(net).name} />}
-          {ev.status === 'sending' && ' · sending'}
+          {status && status !== 'failed' && <span className={`ticks ${status}`} title={TICK_TITLE[status]}>{TICKS[status]}</span>}
         </span>
       </div>
+      {seenHere && <div className="seen">Seen</div>}
       {ev.status === 'failed' && (
         <button className="failed" onClick={() => client.retry(roomId, ev.event_id).catch(() => {})}>Not sent. Tap to retry</button>
       )}
@@ -167,7 +209,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, open, 
         </div>
       )}
       {open && !ev.local && (
-        <div className="actions" onClick={(e) => e.stopPropagation()}>
+        <div className="actions" onClick={(e) => e.stopPropagation()} role="toolbar" aria-label="Message actions">
           {QUICK.map((k) => <button key={k} onClick={() => onReact(k)}>{k}</button>)}
           <button onClick={onReply} aria-label="Reply"><Icon name="reply" size={18} /></button>
           {c.body && <button onClick={() => navigator.clipboard?.writeText(stripReply(c.body))}>Copy</button>}
@@ -308,14 +350,10 @@ function Composer({ ctx, item, target, choice, replyTo, multi, onPick, onClearRe
           <button className="icon-btn" onClick={onClearReply} aria-label="Cancel reply"><Icon name="close" size={16} /></button>
         </div>
       )}
-      {multi && (
+      {multi && menu && (
         <div className="channel-bar">
-          <button className="channel" onClick={() => setMenu(!menu)} aria-haspopup="menu" aria-expanded={menu}>
-            Sending via <NetBadge net={net} label /> <Icon name="chevron" size={16} />
-          </button>
-          <span className="why">{why}</span>
-          {menu && (
             <div className="menu" role="menu">
+              <div className="menu-head">Send on… <span className="muted">(now: {networkInfo(net).name}, {why})</span></div>
               {item.rooms.map((id) => {
                 const n = model.info[id]?.network
                 return (
@@ -328,11 +366,16 @@ function Composer({ ctx, item, target, choice, replyTo, multi, onPick, onClearRe
                 )
               })}
             </div>
-          )}
         </div>
       )}
       {err && <div className="error small">{err}</div>}
       <div className="compose-row">
+        {multi && (
+          <button className="channel" onClick={() => setMenu(!menu)} aria-haspopup="menu" aria-expanded={menu}
+            aria-label={`Sending via ${networkInfo(net).name}, ${why}. Change app`} title={`Sending via ${networkInfo(net).name} (${why})`}>
+            <NetBadge net={net} /><Icon name="chevron" size={14} />
+          </button>
+        )}
         <button className="icon-btn" onClick={() => fileInput.current?.click()} aria-label="Attach"><Icon name="attach" /></button>
         <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
         <textarea

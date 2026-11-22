@@ -141,3 +141,19 @@ test('bridge app tags are dropped from names', async () => {
   assert.equal(cleanName('Team (Work)'), 'Team (Work)')
   assert.equal(normName('Mel (WA)'), normName('Mel'))
 })
+
+test('delivery status: sent, delivered by the bridge, seen by them', async () => {
+  const { deliveryStatus } = await import('./people.js')
+  const mine = msg(ME, now, 'hi')
+  const theirs = msg('@whatsapp_1:x', now + 1000, 'yo')
+  const room = { timeline: [mine, theirs], receipts: {}, bridge: { bridgebot: '@whatsappbot:x' } }
+  assert.equal(deliveryStatus(room, mine, ME), 'sent')
+  room.receipts['@whatsappbot:x'] = mine.event_id
+  assert.equal(deliveryStatus(room, mine, ME), 'delivered')
+  room.receipts['@whatsapp_1:x'] = mine.event_id
+  assert.equal(deliveryStatus(room, mine, ME), 'seen')
+  const later = msg(ME, now + 2000, 'later')
+  room.timeline.push(later)
+  assert.equal(deliveryStatus(room, later, ME), 'sent', 'a receipt on an earlier message does not cover later ones')
+  assert.equal(deliveryStatus(room, { ...later, status: 'sending' }, ME), 'sending')
+})

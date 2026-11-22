@@ -8,6 +8,8 @@ bridges set), a group chat, and a few weeks of history. Uses only the stdlib.
   python3 mockbridge.py seed                      # create everything
   python3 mockbridge.py say whatsapp rokas "hi"   # inbound message, now
   python3 mockbridge.py rooms                     # list seeded rooms
+  python3 mockbridge.py delivered telegram rokas  # bridge says: delivered
+  python3 mockbridge.py read telegram rokas       # he read it
 
 Talks to the dev Synapse on localhost:8008 using the appservice token in
 data/mockbridge.yaml.
@@ -223,6 +225,17 @@ def messages(net, person, limit=5):
             print(json.dumps({"sender": ev["sender"], "body": ev["content"].get("body")}, ensure_ascii=False))
 
 
+def receipt(net, person, who):
+    """Read receipt on the newest event: who='bot' fakes the bridge's "delivered",
+    who='them' fakes the other person having read it."""
+    state = json.loads(STATE.read_text())
+    room = state["rooms"][f"{net}:{person}"]
+    r = req("GET", f"/_matrix/client/v3/rooms/{urllib.parse.quote(room)}/messages?dir=b&limit=1", user=ME)
+    eid = r["chunk"][0]["event_id"]
+    user = bot(net) if who == "bot" else ghost(net, PEOPLE[person][net][0])
+    req("POST", f"/_matrix/client/v3/rooms/{urllib.parse.quote(room)}/receipt/m.read/{urllib.parse.quote(eid)}", {}, user=user)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "seed"
     if cmd == "seed":
@@ -233,5 +246,9 @@ if __name__ == "__main__":
         print(STATE.read_text())
     elif cmd == "messages":
         messages(sys.argv[2], sys.argv[3])
+    elif cmd == "delivered":
+        receipt(sys.argv[2], sys.argv[3], "bot")
+    elif cmd == "read":
+        receipt(sys.argv[2], sys.argv[3], "them")
     else:
         raise SystemExit(__doc__)

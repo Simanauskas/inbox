@@ -64,6 +64,15 @@ export default function Thread({ ctx, item }) {
     return () => document.removeEventListener('visibilitychange', on)
   }, [item.key])
 
+  // no notifications from this person while their chat is open on screen
+  const roomsKey = item.rooms.join('|')
+  useEffect(() => {
+    const apply = () => client.quietRooms(document.visibilityState === 'visible' ? item.rooms : [])
+    apply()
+    document.addEventListener('visibilitychange', apply)
+    return () => { document.removeEventListener('visibilitychange', apply); client.quietRooms([]) }
+  }, [roomsKey])
+
   // refresh "2h ago" labels
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 60000); return () => clearInterval(t) }, [])
 
@@ -368,6 +377,7 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   const { client, model } = ctx
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
+  const [pending, setPending] = useState([]) // photos/files picked, waiting for a caption + send
   const fileInput = useRef(null)
   const typingAt = useRef(0)
   const area = useRef(null)
@@ -392,6 +402,7 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
 
   async function send() {
     const body = text.trim()
+    if (pending.length) return sendPending(body)
     if (!body) return
     setText('')
     setErr(null)
@@ -403,12 +414,29 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
     try { await client.send(target, content) } catch (e) { setErr(`Couldn't send: ${e.message}`) }
   }
 
-  async function onFiles(e) {
+  // Picked files wait above the text field so you can add a caption (like WhatsApp).
+  function onFiles(e) {
     const files = [...e.target.files]
     e.target.value = ''
+    setPending((p) => [...p, ...files.map((file) => ({ file, url: /^(image|video)\//.test(file.type) ? URL.createObjectURL(file) : null }))])
+    setTimeout(() => area.current?.focus(), 0)
+  }
+
+  function removePending(i) {
+    setPending((p) => { if (p[i]?.url) URL.revokeObjectURL(p[i].url); return p.filter((_, j) => j !== i) })
+  }
+
+  async function sendPending(caption) {
+    const items = pending
+    setPending([])
+    setText('')
+    setErr(null)
     onSent()
-    for (const f of files) {
-      try { await client.sendFile(target, f) } catch (er) { setErr(`Couldn't send ${f.name}: ${er.message}`) }
+    for (let i = 0; i < items.length; i++) {
+      const { file, url } = items[i]
+      // the caption goes with the first photo, as in WhatsApp
+      try { await client.sendFile(target, file, i === 0 ? caption : '') } catch (er) { setErr(`Couldn't send ${file.name}: ${er.message}`) }
+      if (url) URL.revokeObjectURL(url)
     }
   }
 
@@ -430,6 +458,18 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
         </div>
       )}
       {err && <div className="error small">{err}</div>}
+      {pending.length > 0 && (
+        <div className="pending">
+          {pending.map((p, i) => (
+            <div key={i} className="pending-item">
+              {p.url && p.file.type.startsWith('image/') ? <img src={p.url} alt="" />
+                : p.url ? <video src={p.url} muted playsInline />
+                : <span className="pending-file">📎 {p.file.name}</span>}
+              <button className="pending-remove" onClick={() => removePending(i)} aria-label={`Remove ${p.file.name}`}><Icon name="close" size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
       {voice.rec ? (
         <div className="compose-row recording">
           <button className="icon-btn danger" onClick={() => voice.stop(false)} aria-label="Cancel voice message"><Icon name="trash" /></button>
@@ -444,11 +484,11 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
           <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
           <textarea
             ref={area} rows={1} value={text} onChange={onChange}
-            placeholder={`Message on ${networkInfo(net).name}`}
+            placeholder={pending.length ? 'Add a caption…' : `Message on ${networkInfo(net).name}`}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send() } }}
           />
-          {text.trim() || !canRecord
-            ? <button className="send" onClick={send} disabled={!text.trim()} aria-label="Send" style={color}><Icon name="send" /></button>
+          {text.trim() || pending.length || !canRecord
+            ? <button className="send" onClick={send} disabled={!text.trim() && !pending.length} aria-label="Send" style={color}><Icon name="send" /></button>
             : <button className="send mic" onClick={startVoice} aria-label="Record voice message" style={color}><Icon name="mic" /></button>}
         </div>
       )}

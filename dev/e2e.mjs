@@ -120,6 +120,36 @@ const probe = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=c
 execFileSync('ffmpeg', ['-v', 'error', '-i', oggPath, '-f', 'null', '-'])
 assert(/codec_name=opus/.test(probe) && /format_name=ogg/.test(probe), `the file is valid Ogg/Opus and decodes (${probe.replace(/\n/g, ' ').trim()})`)
 
+// photo with a caption, like WhatsApp: picking it shows a preview, the text becomes the caption
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+await page.locator('.composer input[type=file]').setInputFiles({ name: 'gym.png', mimeType: 'image/png', buffer: png })
+await page.locator('.pending-item img').waitFor()
+assert((await page.getByPlaceholder('Add a caption…').count()) === 1, 'picked photo waits above the text field for a caption')
+await page.getByPlaceholder('Add a caption…').fill('10 min done 💪')
+await page.getByLabel('Send', { exact: true }).click()
+let captioned = null
+for (let i = 0; i < 20 && !captioned; i++) {
+  await page.waitForTimeout(500)
+  captioned = mock('messages', 'telegram', 'rokas').split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.msgtype === 'm.image')
+}
+assert(captioned && captioned.body === '10 min done 💪' && captioned.filename === 'gym.png', 'photo sent with its caption')
+
+// while his chat is open, his messages don't notify (a push rule per open room), and that stops when leaving
+const rules = () => page.evaluate(async () => {
+  const s = JSON.parse(localStorage.getItem('inbox.session'))
+  const r = await (await fetch(`${s.baseUrl}/_matrix/client/v3/pushrules/`, { headers: { Authorization: `Bearer ${s.accessToken}` } })).json()
+  return r.global.override.filter((x) => x.rule_id.startsWith('inbox-open-')).map((x) => x.rule_id)
+})
+const rr = JSON.parse(mock('rooms')).rooms
+let open = await rules()
+assert(open.includes('inbox-open-' + rr['telegram:rokas']) && open.includes('inbox-open-' + rr['whatsapp:rokas']), 'his chats are quiet while open')
+await page.getByLabel('Back').click()
+await page.waitForTimeout(800)
+open = await rules()
+assert(open.length === 0, 'notifications come back after leaving the chat')
+await page.locator('.row', { hasText: 'Rokas' }).click()
+await page.locator('.ch-pick').first().waitFor()
+
 await page.locator('.thread-name').click()
 await page.getByText('Make default').first().waitFor()
 assert(await page.getByText('Named as in').isVisible(), 'contact page says the name comes from your contacts')

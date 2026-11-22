@@ -98,7 +98,7 @@ export class Client {
   emit() { this.version++; for (const fn of this.listeners) fn() }
 
   // --- HTTP ---
-  async api(method, path, body, { query, raw, contentType } = {}) {
+  async api(method, path, body, { query, raw, contentType, keepalive } = {}) {
     const qs = query ? '?' + new URLSearchParams(query) : ''
     const r = await fetch(this.baseUrl + path + qs, {
       method,
@@ -107,6 +107,7 @@ export class Client {
         ...(raw ? { 'Content-Type': contentType || 'application/octet-stream' } : body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: raw || (body ? JSON.stringify(body) : undefined),
+      keepalive: !!keepalive,
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) {
@@ -118,6 +119,7 @@ export class Client {
 
   // --- sync loop ---
   async start() {
+    this.quietRooms([], true) // drop "chat is open" rules left over from last time
     // Show what we had last time straight away, then catch up from there.
     let since = await this.loadCache()
     let backoff = 1000
@@ -365,7 +367,8 @@ export class Client {
     return res.content_uri
   }
 
-  async sendFile(roomId, file) {
+  // caption: text sent with the photo/file (shown under it, like WhatsApp)
+  async sendFile(roomId, file, caption = '') {
     const url = await this.upload(file)
     const info = { mimetype: file.type, size: file.size }
     let msgtype = 'm.file'
@@ -375,7 +378,30 @@ export class Client {
       if (dims) Object.assign(info, dims)
     } else if (file.type.startsWith('video/')) msgtype = 'm.video'
     else if (file.type.startsWith('audio/')) msgtype = 'm.audio'
-    return this.send(roomId, { msgtype, body: file.name || 'file', url, info })
+    const content = { msgtype, body: caption || file.name || 'file', url, info }
+    if (caption) content.filename = file.name || 'file'
+    return this.send(roomId, content)
+  }
+
+  // While a chat is open on screen, its messages shouldn't notify you (they'd
+  // cover the chat). A server-side push rule per room, removed again when you
+  // leave the chat or the app goes to the background; leftovers (app killed)
+  // are cleaned up on the next start.
+  quietRooms(roomIds, cleanupOnly = false) {
+    const KEY = 'inbox.quietRooms'
+    let current = []
+    try { current = JSON.parse(localStorage.getItem(KEY) || '[]') } catch {}
+    const want = cleanupOnly ? [] : roomIds
+    const ruleId = (id) => `inbox-open-${id}`
+    for (const id of current.filter((r) => !want.includes(r))) {
+      this.api('DELETE', `/_matrix/client/v3/pushrules/global/override/${enc(ruleId(id))}`, null, { keepalive: true }).catch(() => {})
+    }
+    for (const id of want.filter((r) => !current.includes(r))) {
+      this.api('PUT', `/_matrix/client/v3/pushrules/global/override/${enc(ruleId(id))}`, {
+        conditions: [{ kind: 'event_match', key: 'room_id', pattern: id }], actions: [],
+      }).catch(() => {})
+    }
+    try { localStorage.setItem(KEY, JSON.stringify(want)) } catch {}
   }
 
   async sendVoice(roomId, blob, durationMs) {

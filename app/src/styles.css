@@ -308,3 +308,10 @@ li:last-child .row-main { border-bottom: 0; }
 .contact-prompt { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 16px; font-size: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-bottom: 1px solid var(--line); }
 .contact-prompt span { flex: 1; min-width: 0; }
 .contact-prompt .icon-btn { width: 30px; height: 30px; }
+
+/* photos waiting to be sent with a caption */
+.pending { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 8px; }
+.pending-item { position: relative; flex: none; }
+.pending-item img, .pending-item video { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; display: block; }
+.pending-file { display: inline-flex; align-items: center; height: 72px; max-width: 180px; padding: 0 12px; border-radius: 10px; background: var(--surface-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pending-remove { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; background: var(--text); color: var(--bg); display: grid; place-items: center; }

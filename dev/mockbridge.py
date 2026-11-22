@@ -222,7 +222,8 @@ def messages(net, person, limit=5):
     r = req("GET", f"/_matrix/client/v3/rooms/{urllib.parse.quote(room)}/messages?dir=b&limit={limit}", user=ME)
     for ev in r["chunk"]:
         if ev["type"] == "m.room.message":
-            print(json.dumps({"sender": ev["sender"], "body": ev["content"].get("body")}, ensure_ascii=False))
+            c = ev["content"]
+            print(json.dumps({"sender": ev["sender"], "msgtype": c.get("msgtype"), "body": c.get("body"), "filename": c.get("filename")}, ensure_ascii=False))
 
 
 def receipt(net, person, who):

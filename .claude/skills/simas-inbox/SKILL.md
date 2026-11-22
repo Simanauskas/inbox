@@ -74,6 +74,11 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   with ffprobe. Max 5 min.
 - Notification tap: the service worker stores `pendingOpen` in IndexedDB and the app opens that chat on
   start/visibility (iOS may launch the PWA without the #hash).
+- **Photos with a caption**: picked files wait in a preview strip above the input ("Add a caption…");
+  the caption goes with the first file (`sendFile(room, file, caption)`: body = caption, `filename` set).
+- **No notifications from the open chat**: while a thread is visible, `client.quietRooms(rooms)` adds
+  server push rules `override/inbox-open-<roomId>` (actions []) and removes them on leaving / app
+  hidden (keepalive DELETE); leftovers are cleared on the next start (`localStorage inbox.quietRooms`).
 - Online/last-seen status: not available (bridges don't pass presence; Synapse presence is off).
 
 ### Names & the phone book (his rule: he decides; default = his iCloud contacts)

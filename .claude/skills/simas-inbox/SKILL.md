@@ -59,7 +59,12 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   confirms each with "Combine" / "Not the same person".
 
 ### Message UI
-- **Press and hold** (or right-click) a message → reaction bar (👍❤️😂😮😢🙏, reply, copy); a tap does nothing.
+- **Press and hold** (or right-click) a message → reaction bar floating *above* it (below if near the
+  top): his own emojis (Settings → Reactions, up to 8, `quickReactions` in the people account data,
+  default 👍❤️😂😮😢🙏), ＋ (panel with ~100 emojis + "type any emoji"), reply, copy. Taps do nothing;
+  text selection is off in the timeline on touch screens (use Copy).
+- The ⌃ ⌄ ✓ bar above the iPhone keyboard is iOS Safari's form accessory bar: web apps can't hide it;
+  only a native wrapper (e.g. Capacitor, needs an Apple developer account) could.
 - **Ticks** on my messages (`deliveryStatus` in people.js): ✓ on the server, ✓✓ delivered (the bridge
   bot's read receipt — needs `matrix.delivery_receipts: true` / iMessage `bridge.delivery_receipts: true`,
   set by setup.sh), "Seen" under my newest message the other person's read receipt covers.

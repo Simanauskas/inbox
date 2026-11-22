@@ -201,3 +201,10 @@ test('phone book: names, matching and merging', async () => {
   assert.deepEqual(missingFromCard(idx.list[0], { phones: ['37061234567', '37069999999'], emails: ['ROKAS@example.com'] }), { phones: ['37069999999'], emails: [] })
   assert.match(vcard({ name: 'Jonas Bernotas', phones: ['37065666144'] }), /FN:Jonas Bernotas\r\nN:Bernotas;Jonas;;;\r\nTEL;TYPE=CELL:\+37065666144/)
 })
+
+test('reaction emojis: split typed text into whole emojis', async () => {
+  const { splitEmojis, quickReactions, DEFAULT_REACTIONS } = await import('./emoji.js')
+  assert.deepEqual(splitEmojis('🔥 👍🏽 ❤️ab🇱🇹'), ['🔥', '👍🏽', '❤️', '🇱🇹'])
+  assert.deepEqual(quickReactions({}), DEFAULT_REACTIONS)
+  assert.deepEqual(quickReactions({ quickReactions: ['🔥'] }), ['🔥'])
+})

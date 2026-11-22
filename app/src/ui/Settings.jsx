@@ -4,6 +4,26 @@ import { PEOPLE_TYPE } from '../matrix.js'
 import { normConfig } from '../people.js'
 import { pushState, enablePush, disablePush } from '../push.js'
 import { NetBadge, TopBar } from './common.jsx'
+import { DEFAULT_REACTIONS, quickReactions, splitEmojis } from '../emoji.js'
+
+// The emojis in your reaction bar (press and hold a message). Synced to all your devices.
+function Reactions({ client, cfg }) {
+  const current = quickReactions(cfg)
+  const [text, setText] = useState(current.join(''))
+  const picked = splitEmojis(text).slice(0, 8)
+  const changed = picked.join('') !== current.join('')
+  const save = (list) => client.setAccountData(PEOPLE_TYPE, { ...cfg, quickReactions: list })
+  return (
+    <div className="card">
+      <input className="reaction-edit" value={text} onChange={(e) => setText(e.target.value)} aria-label="Your reaction emojis" inputMode="text" />
+      <p className="hint">Type up to 8 emojis, in the order you want them. Any other emoji is one tap away under ＋.</p>
+      <div className="sugg-actions">
+        <button className="text-btn" onClick={() => { setText(DEFAULT_REACTIONS.join('')); save(DEFAULT_REACTIONS) }}>Reset</button>
+        <button className="primary" disabled={!changed || !picked.length} onClick={() => save(picked)}>Save</button>
+      </div>
+    </div>
+  )
+}
 
 function Notifications({ client }) {
   const [state, setState] = useState(null)
@@ -88,6 +108,9 @@ export default function Settings({ ctx }) {
           </label>
           <p className="hint">After that, new messages go to the person's default app.</p>
         </div>
+
+        <h3 className="section">Reactions</h3>
+        <Reactions client={client} cfg={cfg} />
 
         <h3 className="section">Notifications</h3>
         <Notifications client={client} />

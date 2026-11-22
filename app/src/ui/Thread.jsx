@@ -1,13 +1,14 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { go, back } from '../router.js'
-import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus } from '../people.js'
+import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig } from '../people.js'
 import { networkInfo } from '../networks.js'
 import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
 import { ContactPrompt } from './PhoneBook.jsx'
+import { EMOJI_GRID, quickReactions, splitEmojis } from '../emoji.js'
+import { PEOPLE_TYPE } from '../matrix.js'
 
 // manual channel picks survive navigating away and back (per person, this session)
 const overrides = new Map()
-const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
 export default function Thread({ ctx, item }) {
   const { client, model } = ctx
@@ -21,6 +22,8 @@ export default function Thread({ ctx, item }) {
   const [loading, setLoading] = useState(false)
   const [replyTo, setReplyTo] = useState(null) // { ev, roomId }
   const [active, setActive] = useState(null) // event id with open action bar
+  const [picker, setPicker] = useState(null) // { ev, roomId } for the "+" emoji panel
+  const quick = quickReactions(normConfig(client.accountData[PEOPLE_TYPE]))
   const [, tick] = useState(0)
 
   const override = overrides.get(item.key)
@@ -150,13 +153,19 @@ export default function Thread({ ctx, item }) {
                 open={active === en.ev.event_id}
                 onOpen={() => setActive(en.ev.event_id)}
                 onReply={() => { setReplyTo(en); setActive(null) }}
+                quick={quick}
                 onReact={(k) => { client.react(en.roomId, en.ev.event_id, k).catch(() => {}); setActive(null) }}
+                onMore={() => { setPicker(en); setActive(null) }}
               />
             </React.Fragment>
           )
         })}
         {typing.length > 0 && <div className="typing"><span /><span /><span /></div>}
       </div>
+      {picker && (
+        <EmojiSheet onClose={() => setPicker(null)}
+          onPick={(k) => { client.react(picker.roomId, picker.ev.event_id, k).catch(() => {}); setPicker(null) }} />
+      )}
       <Composer
         ctx={ctx} target={target} replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
@@ -205,9 +214,13 @@ function useLongPress(onLong, ms = 420) {
   }
 }
 
-function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status, seenHere, open, onOpen, onReply, onReact }) {
+function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status, seenHere, open, onOpen, onReply, onReact, onMore, quick }) {
   const { client, model } = ctx
   const press = useLongPress(onOpen)
+  const box = useRef(null)
+  // the bar floats above the message (below it if the message is at the top of the screen)
+  const [below, setBelow] = useState(false)
+  useLayoutEffect(() => { if (open && box.current) setBelow(box.current.getBoundingClientRect().top < 150) }, [open])
   const { ev, roomId, reactions } = en
   const room = client.rooms[roomId]
   const net = model.info[roomId]?.network
@@ -218,7 +231,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
   const time = new Date(ev.origin_server_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className={`msg ${mine ? 'out' : 'in'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${notice ? 'notice' : ''}`} style={{ '--net': networkInfo(net).color }}>
+    <div ref={box} className={`msg ${mine ? 'out' : 'in'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${notice ? 'notice' : ''} ${open ? 'open' : ''}`} style={{ '--net': networkInfo(net).color }}>
       {showNet && <div className="msg-net"><NetBadge net={net} label /></div>}
       {showSender && <div className="msg-sender">{cleanName(room?.members[ev.sender]?.displayname || ev.sender)}</div>}
       <div className={`bubble ${open ? 'pressed' : ''}`} {...press}>
@@ -243,8 +256,9 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
         </div>
       )}
       {open && !ev.local && (
-        <div className="actions" onClick={(e) => e.stopPropagation()} role="toolbar" aria-label="Message actions">
-          {QUICK.map((k) => <button key={k} onClick={() => onReact(k)}>{k}</button>)}
+        <div className={`actions ${below ? 'below' : 'above'}`} onClick={(e) => e.stopPropagation()} role="toolbar" aria-label="Message actions">
+          {quick.map((k) => <button key={k} onClick={() => onReact(k)}>{k}</button>)}
+          <button className="more" onClick={onMore} aria-label="More emojis">＋</button>
           <button onClick={onReply} aria-label="Reply"><Icon name="reply" size={18} /></button>
           {c.body && <button onClick={() => navigator.clipboard?.writeText(stripReply(c.body))}>Copy</button>}
         </div>
@@ -492,6 +506,22 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
             : <button className="send mic" onClick={startVoice} aria-label="Record voice message" style={color}><Icon name="mic" /></button>}
         </div>
       )}
+    </div>
+  )
+}
+
+// "+" in the reaction bar: any emoji — common ones to tap, or type one from your keyboard.
+function EmojiSheet({ onPick, onClose }) {
+  const [typed, setTyped] = useState('')
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Pick an emoji">
+        <input className="search" value={typed} placeholder="Type any emoji…" enterKeyHint="done"
+          onChange={(e) => { const g = splitEmojis(e.target.value); setTyped(e.target.value); if (g.length) onPick(g[0]) }} />
+        <div className="emoji-grid">
+          {EMOJI_GRID.map((k) => <button key={k} onClick={() => onPick(k)}>{k}</button>)}
+        </div>
+      </div>
     </div>
   )
 }

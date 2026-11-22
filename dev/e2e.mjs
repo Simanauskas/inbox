@@ -37,6 +37,7 @@ await page.getByLabel('Back').click()
 
 const rows = await page.locator('.list .row').count()
 assert(rows === 6, `inbox has 6 entries after merging (4 people + Tomas + group) – got ${rows}`)
+assert(await page.getByRole('button', { name: 'Show 1 chat with no messages yet' }).isVisible(), 'chat with no messages is tucked away at the bottom')
 await page.screenshot({ path: `${out}/3-inbox-merged.png` })
 
 await page.locator('.row', { hasText: 'Rokas' }).click()

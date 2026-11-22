@@ -51,7 +51,13 @@ registrations with the same id), Postgres DB per bridge,
 `double_puppet.secrets[server] = "as_token:<doublepuppet token>"`,
 `encryption.allow: false`, `backfill.enabled: true`,
 `max_initial_messages: 1000`. WhatsApp: `network.history_sync.request_full_sync: true`
-(a year of history). Telegram: `network.api_id/api_hash`.
+(a year of history). Telegram: `network.api_id/api_hash`. Messenger:
+`network.e2ee_backfill: true` — most Messenger 1:1 chats are end-to-end
+encrypted, so the bridge creates their rooms but gets no history unless it
+restores Messenger's encrypted backup with his 6-digit secure-storage PIN,
+asked during login (existing login: `list-logins`, then `relogin <id>` in
+the Messenger bot chat). The app tucks message-less chats into a collapsed
+"N chats with no messages yet" row at the bottom of the inbox.
 
 **iMessage (mautrix-imessage, legacy layout)** with `imessage.platform: bluebubbles`,
 `bluebubbles_url` (default `http://host.docker.internal:1234`; compose adds
@@ -77,7 +83,10 @@ both ways. Phone numbers in iMessage ghost ids may be escaped (`=2b` = `+`);
 - Messenger: `login` → username/password flow (Messenger iOS/Android API) is
   easiest; cookie flows (facebook.com / messenger.com) as fallback.
 - Instagram: `login` → cookies from instagram.com via browser dev tools.
-- iMessage: no login; connects to BlueBubbles by itself.
+- iMessage: no login; connects to BlueBubbles by itself. Names show as phone
+  numbers if the Mac had no contacts at first sync: add contacts on the Mac,
+  send `refresh-contacts` in the iMessage bot chat, then
+  `docker compose restart imessage` (participants re-sync on startup).
 
 WhatsApp/Messenger/Instagram aren't officially allowed; occasional "confirm
 it's you" prompts are normal. Bridges need `docker compose pull && up -d`

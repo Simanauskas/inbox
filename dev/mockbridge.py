@@ -34,6 +34,8 @@ PEOPLE = {
     "rokas": {"whatsapp": ("37061234567", "Rokas Petrauskas"), "telegram": ("118822", "Rokas Petrauskas")},
     "ilona": {"whatsapp": ("37069876543", "Ilona"), "instagram": ("ilona.rad", "Ilona"), "facebook": ("10001", "Ilona")},
     "tomas": {"facebook": ("10002", "Tomas Kazlauskas")},
+    # an encrypted Messenger chat the bridge found but couldn't fetch history for
+    "jonas": {"facebook": ("10003", "Jonas Jonaitis")},
     "mantas": {"telegram": ("553311", "Mantas J."), "instagram": ("mantas_j", "mantas_j")},
     "egle": {"whatsapp": ("37065554433", "Eglė Žemaitė"), "telegram": ("771100", "Egle Zemaite")},
 }

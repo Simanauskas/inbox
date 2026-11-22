@@ -91,6 +91,9 @@ extra_of() {
     # ask the phone for a year of history instead of three months
     whatsapp) echo '| .network.history_sync.request_full_sync = true' ;;
     telegram) echo '| .network.api_id = env(TELEGRAM_API_ID) | .network.api_hash = strenv(TELEGRAM_API_HASH)' ;;
+    # most Messenger 1:1 chats are end-to-end encrypted; their history only comes
+    # from Messenger's encrypted backup, which the bridge restores with your 6-digit PIN
+    facebook) echo '| .network.e2ee_backfill = true' ;;
     *) echo '' ;;
   esac
 }

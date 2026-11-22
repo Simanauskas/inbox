@@ -7,6 +7,7 @@ export default function Inbox({ ctx, selected }) {
   const { client, model, sugg } = ctx
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
+  const [showEmpty, setShowEmpty] = useState(false)
 
   const nets = useMemo(() => [...new Set(model.items.flatMap((i) => i.networks))], [model])
   const items = useMemo(() => {
@@ -18,6 +19,11 @@ export default function Inbox({ ctx, selected }) {
       return !nq || normName(i.name).includes(nq)
     })
   }, [model, q, filter])
+  // Bridges create a room for every contact/thread they find, even with no
+  // messages (e.g. encrypted Messenger chats without restored history). Keep
+  // those out of the way until something is said in them.
+  const active = items.filter((i) => i.lastEvent || i.typing)
+  const empty = items.filter((i) => !i.lastEvent && !i.typing)
 
   return (
     <div className="page inbox">
@@ -46,24 +52,15 @@ export default function Inbox({ ctx, selected }) {
         </button>
       )}
       <ul className="list">
-        {items.map((i) => (
-          <li key={i.key}>
-            <button className={`row ${selected === i.key ? 'selected' : ''}`} onClick={() => go('t', i.key)}>
-              <Avatar client={client} mxc={i.avatarUrl} name={i.name} />
-              <div className="row-main">
-                <div className="row-top">
-                  <span className={`row-name ${i.unread ? 'bold' : ''}`}>{i.name}</span>
-                  <span className="row-time">{timeShort(i.lastTs)}</span>
-                </div>
-                <div className="row-bottom">
-                  <span className="nets">{i.networks.map((n) => <NetBadge key={n} net={n} />)}</span>
-                  <span className={`row-preview ${i.unread ? 'bold' : ''}`}>{i.typing ? <i>typing…</i> : previewText(i.lastEvent, client.userId)}</span>
-                  {i.unread > 0 && <span className="badge">{i.unread}</span>}
-                </div>
-              </div>
+        {active.map((i) => <Row key={i.key} client={client} i={i} selected={selected} />)}
+        {client.synced && empty.length > 0 && (
+          <li>
+            <button className="empty-toggle" onClick={() => setShowEmpty(!showEmpty)} aria-expanded={showEmpty}>
+              {showEmpty ? 'Hide' : 'Show'} {empty.length} {empty.length === 1 ? 'chat' : 'chats'} with no messages yet
             </button>
           </li>
-        ))}
+        )}
+        {showEmpty && empty.map((i) => <Row key={i.key} client={client} i={i} selected={selected} />)}
         {client.synced && !items.length && (
           <li className="empty">{model.items.length ? 'No matches.' : <>No chats yet. Connect an app in <a href="#/settings">Settings</a>.</>}</li>
         )}
@@ -77,6 +74,27 @@ export default function Inbox({ ctx, selected }) {
         )}
       </ul>
     </div>
+  )
+}
+
+function Row({ client, i, selected }) {
+  return (
+    <li>
+      <button className={`row ${selected === i.key ? 'selected' : ''}`} onClick={() => go('t', i.key)}>
+        <Avatar client={client} mxc={i.avatarUrl} name={i.name} />
+        <div className="row-main">
+          <div className="row-top">
+            <span className={`row-name ${i.unread ? 'bold' : ''}`}>{i.name}</span>
+            <span className="row-time">{i.lastEvent ? timeShort(i.lastTs) : ''}</span>
+          </div>
+          <div className="row-bottom">
+            <span className="nets">{i.networks.map((n) => <NetBadge key={n} net={n} />)}</span>
+            <span className={`row-preview ${i.unread ? 'bold' : ''}`}>{i.typing ? <i>typing…</i> : i.lastEvent ? previewText(i.lastEvent, client.userId) : <i>No messages yet</i>}</span>
+            {i.unread > 0 && <span className="badge">{i.unread}</span>}
+          </div>
+        </div>
+      </button>
+    </li>
   )
 }
 

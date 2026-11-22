@@ -5,6 +5,7 @@ const { chromium, devices } = createRequire(import.meta.url)('playwright')
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import fs from 'node:fs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const out = process.argv[2] || path.join(here, 'shots')
@@ -102,6 +103,22 @@ await page.getByLabel('Send voice message').click()
 let voiceSent = false
 for (let i = 0; i < 20 && !voiceSent; i++) { await page.waitForTimeout(500); voiceSent = mock('messages', 'telegram', 'rokas').includes('Voice message') }
 assert(voiceSent, 'voice message recorded and sent to Telegram')
+// it must be a real Ogg/Opus voice note (WhatsApp accepts nothing else)
+const voice = await page.evaluate(async (roomId) => {
+  const s = JSON.parse(localStorage.getItem('inbox.session'))
+  const h = { Authorization: `Bearer ${s.accessToken}` }
+  const r = await (await fetch(`${s.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=10`, { headers: h })).json()
+  const ev = r.chunk.find((e) => e.content?.msgtype === 'm.audio')
+  const [server, id] = ev.content.url.slice(6).split('/')
+  const bytes = new Uint8Array(await (await fetch(`${s.baseUrl}/_matrix/client/v1/media/download/${server}/${id}`, { headers: h })).arrayBuffer())
+  return { mime: ev.content.info.mimetype, voice: !!ev.content['org.matrix.msc3245.voice'], b64: btoa(String.fromCharCode(...bytes)) }
+}, JSON.parse(mock('rooms')).rooms['telegram:rokas'])
+assert(voice.mime === 'audio/ogg; codecs=opus' && voice.voice, `sent as an Ogg/Opus voice note (${voice.mime})`)
+const oggPath = path.join(out, 'voice.ogg')
+fs.writeFileSync(oggPath, Buffer.from(voice.b64, 'base64'))
+const probe = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name:format=format_name,duration', '-of', 'compact', oggPath], { encoding: 'utf8' })
+execFileSync('ffmpeg', ['-v', 'error', '-i', oggPath, '-f', 'null', '-'])
+assert(/codec_name=opus/.test(probe) && /format_name=ogg/.test(probe), `the file is valid Ogg/Opus and decodes (${probe.replace(/\n/g, ' ').trim()})`)
 
 await page.locator('.thread-name').click()
 await page.getByText('Make default').first().waitFor()

@@ -318,7 +318,11 @@ function linkify(text) {
 
 // Voice notes: the browser records with whatever it supports (iPhone: AAC/mp4,
 // Chrome: Opus/webm); the bridges convert it to each app's voice format.
-const VOICE_TYPES = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4', 'audio/webm']
+// WhatsApp only takes Ogg/Opus voice notes, so record Opus (WebM on Chrome and
+// iPhone) and re-wrap it as Ogg before sending; iMessage gets MP4/AAC, which
+// Messages plays natively.
+const VOICE_TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm']
+const IMESSAGE_VOICE_TYPES = ['audio/mp4', ...VOICE_TYPES]
 const MAX_VOICE_MS = 5 * 60_000
 const fmtDur = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`
 
@@ -334,9 +338,9 @@ function useRecorder(onDone) {
     }, 250)
     return () => clearInterval(t)
   }, [rec])
-  async function start() {
+  async function start(net) {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const mimeType = VOICE_TYPES.find((t) => window.MediaRecorder?.isTypeSupported?.(t))
+    const mimeType = (net === 'imessage' ? IMESSAGE_VOICE_TYPES : VOICE_TYPES).find((t) => window.MediaRecorder?.isTypeSupported?.(t))
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
     const chunks = []
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
@@ -410,7 +414,7 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
 
   async function startVoice() {
     setErr(null)
-    try { await voice.start() } catch (e) {
+    try { await voice.start(net) } catch (e) {
       setErr(e.name === 'NotAllowedError' ? 'Inbox isn’t allowed to use the microphone. Allow it in your phone’s settings for this app.' : `Can’t record: ${e.message}`)
     }
   }

@@ -66,8 +66,12 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
 - **Which app to send on** is picked in the thread header: the app badges under the name are radio
   buttons; the current target is full colour + underlined, others dimmed; tap to switch (title/aria
   says why it was chosen). The input row is just attach · text · send/mic.
-- **Voice messages**: mic button when the field is empty → MediaRecorder (ogg/webm Opus or iPhone mp4)
-  → `client.sendVoice` (m.audio + `org.matrix.msc3245.voice`, duration); bridges convert per app. Max 5 min.
+- **Voice messages**: mic button when the field is empty → MediaRecorder → `client.sendVoice`
+  (m.audio + `org.matrix.msc3245.voice`, duration). Bridges check voice formats strictly: WhatsApp
+  accepts only `audio/ogg; codecs=opus`; Telegram ogg/mpeg/mp4; Messenger/IG mp4 (+ogg with ffmpeg).
+  So the app records Opus in WebM (Chrome, iPhone Safari) and re-wraps it as Ogg in the browser
+  (`app/src/ogg.js`, no re-encoding); for iMessage it records audio/mp4. e2e checks the uploaded file
+  with ffprobe. Max 5 min.
 - Notification tap: the service worker stores `pendingOpen` in IndexedDB and the app opens that chat on
   start/visibility (iOS may launch the PWA without the #hash).
 - Online/last-seen status: not available (bridges don't pass presence; Synapse presence is off).

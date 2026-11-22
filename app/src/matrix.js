@@ -2,6 +2,7 @@
 // are unencrypted (the bridges run there), so there is no crypto here.
 
 import { idbGet, idbSet, idbDel } from './idb.js'
+import { webmOpusToOgg } from './ogg.js'
 
 const filter = (limit) => ({
   room: {
@@ -378,13 +379,17 @@ export class Client {
   }
 
   async sendVoice(roomId, blob, durationMs) {
-    const type = (blob.type || 'audio/webm').split(';')[0]
+    let type = (blob.type || 'audio/webm').split(';')[0]
+    // WebM → Ogg (same Opus audio): the format WhatsApp needs for voice notes
+    if (type === 'audio/webm') {
+      try { blob = webmOpusToOgg(await blob.arrayBuffer()); type = 'audio/ogg' } catch (e) { console.warn('voice: could not re-wrap as Ogg', e) }
+    }
     const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm'
     const file = new File([blob], `Voice message.${ext}`, { type })
     const url = await this.upload(file)
     return this.send(roomId, {
       msgtype: 'm.audio', body: 'Voice message', filename: file.name, url,
-      info: { mimetype: type, size: file.size, duration: Math.round(durationMs) },
+      info: { mimetype: type === 'audio/ogg' ? 'audio/ogg; codecs=opus' : type, size: file.size, duration: Math.round(durationMs) },
       'org.matrix.msc1767.audio': { duration: Math.round(durationMs) },
       'org.matrix.msc3245.voice': {},
     })

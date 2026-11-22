@@ -80,6 +80,18 @@ iMessage bridge runs against BlueBubbles Server 1.9.12 on the same Mac.
 He updates server files by downloading single files from GitHub ("Download
 raw file") into that folder and re-running `./setup.sh`.
 
+**Moving to a VPS (22 Nov 2026):** the Air was too slow ("everything takes
+too long"). Cherry Servers and Hetzner weren't selling; OVH only offered
+Warsaw on VPS-3. He ordered **Hostika.lt VX3** (Lithuania, 6 vCPU, 10 GB,
+100 GB NVMe, Ubuntu 24.04, €9.90 + VAT, billed quarterly, root password at
+order, IPv4 only, no backups mentioned). Plan: `server/move.sh export` on
+the Air → scp → `move.sh import` on the VPS (tested end to end in the
+container: logins, messages, account data survive). iMessage stays on the
+Air via BlueBubbles + a second tunnel `inbox-mac` (`mac/docker-compose.yml`,
+`bb.simas.fit` → `http://host.docker.internal:1234`, WAF rule allowing only
+the VPS IP), `BLUEBUBBLES_URL=https://bb.simas.fit`. Nightly `backup.sh`
+(cron 04:17, keeps 7, excludes media). After the move: switch SSH to keys.
+
 Open questions: he felt not everything synced (asked which app/chats — no
 answer yet; note backfill only happens once per chat on a normal Synapse, so
 scrolling up can't fetch older history). `curl https://matrix.simas.fit/_matrix/client/versions`

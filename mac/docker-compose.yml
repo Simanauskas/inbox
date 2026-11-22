@@ -1,0 +1,16 @@
+# Runs on the Mac that has iMessage (next to the BlueBubbles Server app) once
+# the Inbox server lives elsewhere: a Cloudflare tunnel that lets the server
+# reach BlueBubbles at https://bb.<your domain>.
+#
+#   echo "TUNNEL_TOKEN=<token of the inbox-mac tunnel>" > .env
+#   docker compose up -d
+name: inbox-mac
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?put the inbox-mac tunnel token in .env}
+    extra_hosts: [host.docker.internal:host-gateway]

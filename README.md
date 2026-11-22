@@ -169,15 +169,61 @@ protocols. If a bridge stops working, updating usually fixes it.
 
 ## Backups
 
-Configs, keys and media are in `server/data/`. The database lives in Docker's
-own storage (volume `inbox_pgdata`, much faster than a folder on a Mac). Back
-up both:
+Configs, keys and media are in `server/data/`; the database lives in Docker's
+own storage (volume `inbox_pgdata`). `server/backup.sh` saves both (without
+media, which is large) into `server/backups/`, keeping the last 7:
 
 ```bash
-cd server && docker compose exec -T postgres pg_dumpall -U synapse > backup.sql
+cd server && ./backup.sh              # one now
+cd server && ./backup.sh --install    # every night at 04:17
 ```
 
-and copy `server/data/` (plus `server/.env`) somewhere safe.
+`move.sh import` installs the nightly one for you. To keep copies off the
+server too, pull them to another machine now and then, e.g. from the Mac:
+
+```bash
+rsync -a root@SERVER-IP:/root/server/backups/ ~/InboxBackups/
+```
+
+## Moving to another server
+
+Everything — logins to every app, chats, combined people, settings — moves
+with two commands. Nothing has to be logged in again.
+
+1. On the old machine, in the `server` folder:
+   ```bash
+   ./move.sh export
+   ```
+   It stops the server there (leave it stopped: two copies logged in to the
+   same WhatsApp etc. would fight) and writes `inbox-move.tar.gz`.
+2. Copy it over:
+   ```bash
+   scp inbox-move.tar.gz root@NEW-SERVER-IP:/root/
+   ```
+3. On the new server (Ubuntu, as root):
+   ```bash
+   cd /root && tar xzf inbox-move.tar.gz && cd server && ./move.sh import
+   ```
+   It installs Docker if needed, restores the database, runs `setup.sh` and
+   schedules the nightly backup. The Cloudflare tunnel reconnects from the new
+   machine, so `matrix.simas.fit` and the app don't change.
+
+**iMessage after moving off the Mac.** BlueBubbles has to stay on the Mac, so
+the server reaches it through a second Cloudflare tunnel:
+
+1. Cloudflare → Zero Trust → Networks → Tunnels → create `inbox-mac` (Docker);
+   public hostname `bb.simas.fit` → HTTP → `http://host.docker.internal:1234`.
+2. On the Mac, in the repo's `mac/` folder:
+   ```bash
+   echo "TUNNEL_TOKEN=<inbox-mac token>" > .env && docker compose up -d
+   ```
+3. Import with the new address (or edit `BLUEBUBBLES_URL` in `.env` and re-run `./setup.sh`):
+   ```bash
+   BLUEBUBBLES_URL=https://bb.simas.fit ./move.sh import
+   ```
+4. Cloudflare → your domain → Security → WAF → custom rule: block when
+   *Hostname equals `bb.simas.fit`* and *IP source address does not equal
+   NEW-SERVER-IP*, so only your server can talk to BlueBubbles.
 
 ---
 

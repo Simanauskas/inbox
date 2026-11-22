@@ -4,3 +4,7 @@ server/data/
 server/.env
 dev/data/
 dev/shots/
+server/backups/
+server/inbox-move.tar.gz
+server/restore-errors.log
+mac/.env

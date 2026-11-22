@@ -67,7 +67,14 @@ export default function Inbox({ ctx, selected }) {
         {client.synced && !items.length && (
           <li className="empty">{model.items.length ? 'No matches.' : <>No chats yet. Connect an app in <a href="#/settings">Settings</a>.</>}</li>
         )}
-        {!client.synced && <li className="empty"><div className="spinner" /></li>}
+        {!client.synced && (
+          <li className="empty loading">
+            <div className="spinner" />
+            <p>{client.status === 'error' || client.status === 'offline'
+              ? 'Still loading your chats. The server is taking a while; retrying…'
+              : 'Loading your chats… The first time can take a minute.'}</p>
+          </li>
+        )}
       </ul>
     </div>
   )

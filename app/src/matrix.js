@@ -1,15 +1,26 @@
 // A small Matrix client: just what the inbox needs. Rooms on your own server
 // are unencrypted (the bridges run there), so there is no crypto here.
 
-const SYNC_FILTER = {
+import { idbGet, idbSet, idbDel } from './idb.js'
+
+const filter = (limit) => ({
   room: {
-    timeline: { limit: 20 },
+    timeline: { limit },
     state: { lazy_load_members: true },
     ephemeral: { types: ['m.receipt', 'm.typing'] },
     account_data: { types: ['m.fully_read'] },
   },
   presence: { not_types: ['*'] },
-}
+})
+// The first load asks for only a few messages per chat (enough for the list
+// and its ordering): with hundreds of bridged chats, 20 each made the first
+// load take minutes, longer than Cloudflare waits. Opening a chat loads more.
+const INITIAL_FILTER = filter(5)
+const SYNC_FILTER = filter(20)
+
+// What's kept on the device so the app opens instantly next time.
+const CACHE_VERSION = 1
+const CACHE_EVENTS_PER_ROOM = 15
 
 export const PEOPLE_TYPE = 'fit.simas.inbox.people'
 export const SETTINGS_TYPE = 'fit.simas.inbox.settings'
@@ -98,7 +109,7 @@ export class Client {
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) {
-      if (r.status === 401 && data.errcode === 'M_UNKNOWN_TOKEN') { this.stop(); this.onLoggedOut?.() }
+      if (r.status === 401 && data.errcode === 'M_UNKNOWN_TOKEN') { this.stop(); this.clearCache(); this.onLoggedOut?.() }
       throw new MatrixError(r.status, data)
     }
     return data
@@ -106,23 +117,39 @@ export class Client {
 
   // --- sync loop ---
   async start() {
-    let since = null
+    // Show what we had last time straight away, then catch up from there.
+    let since = await this.loadCache()
     let backoff = 1000
-    let filterId
-    try {
-      filterId = (await this.api('POST', `/_matrix/client/v3/user/${enc(this.userId)}/filter`, SYNC_FILTER)).filter_id
-    } catch { filterId = JSON.stringify(SYNC_FILTER) }
+    const filters = {}
+    for (const [name, f] of [['initial', INITIAL_FILTER], ['sync', SYNC_FILTER]]) {
+      try {
+        filters[name] = (await this.api('POST', `/_matrix/client/v3/user/${enc(this.userId)}/filter`, f)).filter_id
+      } catch { filters[name] = JSON.stringify(f) }
+    }
+    this.cacheTimer = setInterval(() => this.saveCache(), 60_000)
+    this.onHide = () => { if (document.visibilityState === 'hidden') this.saveCache() }
+    document.addEventListener('visibilitychange', this.onHide)
     while (!this.stopped) {
       try {
-        const query = { filter: filterId, timeout: since ? '30000' : '0' }
+        const query = { filter: since ? filters.sync : filters.initial, timeout: since ? '30000' : '0' }
         if (since) query.since = since
         const res = await this.api('GET', '/_matrix/client/v3/sync', null, { query })
         this.applySync(res, !since)
+        const first = !since
         since = res.next_batch
+        this.since = since
         backoff = 1000
         if (this.status !== 'live' || !this.synced) { this.status = 'live'; this.synced = true; this.emit() }
+        if (first) this.saveCache()
       } catch (e) {
         if (this.stopped) return
+        // a saved position the server no longer accepts: start over
+        if (since && e instanceof MatrixError && e.status >= 400 && e.status < 500 && e.status !== 429) {
+          since = null
+          this.rooms = {}
+          this.synced = false
+          await idbDel(this.cacheKey())
+        }
         this.status = e instanceof MatrixError ? 'error' : 'offline'
         this.emit()
         await sleep(backoff)
@@ -131,7 +158,52 @@ export class Client {
     }
   }
 
-  stop() { this.stopped = true }
+  stop() {
+    this.stopped = true
+    clearInterval(this.cacheTimer)
+    if (this.onHide) document.removeEventListener('visibilitychange', this.onHide)
+  }
+
+  // --- on-device cache ---
+  cacheKey() { return `sync:${this.userId}` }
+
+  async loadCache() {
+    const c = await idbGet(this.cacheKey())
+    if (!c || c.version !== CACHE_VERSION || !c.since || this.stopped) return null
+    for (const r of c.rooms) {
+      const room = Object.assign(newRoom(r.id), r)
+      room.byId = Object.fromEntries(room.timeline.map((e) => [e.event_id, e]))
+      this.rooms[r.id] = room
+    }
+    this.accountData = c.accountData || {}
+    this.since = c.since
+    this.synced = true
+    this.emit()
+    return c.since
+  }
+
+  saveCache() {
+    if (!this.since || !this.synced || this.stopped) return
+    const rooms = []
+    for (const room of Object.values(this.rooms)) {
+      if (room.membership !== 'join') continue
+      const events = room.timeline.filter((e) => !e.local)
+      const cut = events.length > CACHE_EVENTS_PER_ROOM
+      rooms.push({
+        id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
+        heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount,
+        receipts: room.receipts, fullyRead: room.fullyRead, createTs: room.createTs, roomType: room.roomType || null,
+        timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
+        // a trimmed timeline can't continue from the old pagination token;
+        // without one, the next "load older" starts from the newest and skips what it has
+        prevBatch: cut ? null : room.prevBatch,
+        reachedStart: cut ? false : room.reachedStart,
+      })
+    }
+    return idbSet(this.cacheKey(), { version: CACHE_VERSION, since: this.since, accountData: this.accountData, rooms, savedAt: Date.now() })
+  }
+
+  clearCache() { return idbDel(this.cacheKey()) }
 
   applySync(res, initial) {
     for (const ev of res.account_data?.events || []) this.accountData[ev.type] = ev.content
@@ -355,6 +427,7 @@ export class Client {
 
   logout() {
     this.stop()
+    this.clearCache()
     return this.api('POST', '/_matrix/client/v3/logout', {}).catch(() => {})
   }
 

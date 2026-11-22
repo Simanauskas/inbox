@@ -71,6 +71,23 @@ await page.goto(APP + '/#/settings')
 await page.getByText('Connected apps').waitFor()
 await page.screenshot({ path: `${out}/8-settings.png`, fullPage: true })
 
+// reopening uses the copy saved on the device: the list shows even if the server is slow to answer
+await page.evaluate(() => new Promise((r) => { document.dispatchEvent(new Event('visibilitychange')); setTimeout(r, 300) }))
+const cached = await page.evaluate(() => new Promise((resolve) => {
+  const req = indexedDB.open('inbox', 1)
+  req.onsuccess = () => { const g = req.result.transaction('kv').objectStore('kv').get('sync:@simas:inbox.test'); g.onsuccess = () => resolve(g.result ? g.result.rooms.length : 0) }
+  req.onerror = () => resolve(0)
+}))
+assert(cached >= 10, `chat list saved on the device (${cached} chats)`)
+await page.route('**/_matrix/client/v3/sync**', () => {}) // never answers
+await page.goto(APP + '/#/')
+await page.locator('.row', { hasText: 'Rokas' }).waitFor({ timeout: 5000 })
+assert((await page.locator('.list .row').count()) === 6, 'reopened with the server not answering: all 6 entries shown from the saved copy')
+await page.unroute('**/_matrix/client/v3/sync**')
+await page.locator('.row', { hasText: 'Rokas' }).click()
+await page.getByText('Also bring the sled straps').waitFor()
+assert(true, 'opening a chat from the saved copy shows its messages')
+
 // desktop layout (fresh context; give the first sync a moment to pick up the merge)
 const desk = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: await ctx.storageState() })
 const dp = await desk.newPage()

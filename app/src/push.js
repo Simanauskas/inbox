@@ -1,3 +1,5 @@
+import { idbSet, idbDel } from './idb.js'
+
 // Notifications while the app is closed: Web Push through the server's push
 // gateway (Sygnal). The server advertises its push key in .well-known.
 const FLAG = 'inbox.push'
@@ -124,20 +126,5 @@ export async function closeNotifications(roomIds) {
 
 // The service worker reads the session from IndexedDB (it can't see localStorage).
 export function saveSessionForWorker(session) {
-  return idb((store) => (session ? store.put({ baseUrl: session.baseUrl, accessToken: session.accessToken }, 'session') : store.delete('session')))
-}
-
-function idb(fn) {
-  return new Promise((resolve) => {
-    try {
-      const req = indexedDB.open('inbox', 1)
-      req.onupgradeneeded = () => req.result.createObjectStore('kv')
-      req.onerror = () => resolve()
-      req.onsuccess = () => {
-        const tx = req.result.transaction('kv', 'readwrite')
-        fn(tx.objectStore('kv'))
-        tx.oncomplete = tx.onerror = () => resolve()
-      }
-    } catch { resolve() }
-  })
+  return session ? idbSet('session', { baseUrl: session.baseUrl, accessToken: session.accessToken }) : idbDel('session')
 }

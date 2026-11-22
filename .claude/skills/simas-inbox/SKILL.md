@@ -36,6 +36,12 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
 - **No backend of its own.** The app is a thin Matrix client (`app/src/matrix.js`:
   sync loop, pagination, send/upload, authenticated media as blob URLs). Rooms
   are unencrypted (own server, bridges encryption off), so there's no crypto.
+- **Loading**: the first sync asks for 5 events per room (20 made the first load
+  exceed Cloudflare's 100 s limit once he had hundreds of bridged chats);
+  later syncs 20. The client saves rooms (last 15 events each), account data
+  and the sync token in IndexedDB (`sync:<userId>`, `app/src/idb.js`) every
+  minute and when hidden, and starts from that copy next time; a rejected token
+  starts over. Cleared on sign-out.
 - **Federation is off** (`federation_domain_whitelist: []`, listener only serves
   `client`). Registration off. Every invite is auto-accepted by the app (only the
   bridges can invite).

@@ -73,8 +73,10 @@ composer shows "Sending via <app> ▾" plus the reason.
 **Live on a VPS: Hostika.lt VX3** (Lithuania; 6 vCPU, 10 GB, 100 GB NVMe,
 Ubuntu 24.04), IP **38.210.227.208**, hostname inbox.simas.fit. Server folder
 **`/root/server`** (moved with `move.sh`; logins, chats and account data came
-along). SSH is key-only (`/etc/ssh/sshd_config.d/00-inbox.conf`), his key is
-the Air's `~/.ssh/id_ed25519`. Nightly `backup.sh` at 04:17 into
+along). SSH is key-only (`/etc/ssh/sshd_config.d/00-inbox.conf`). He works from his
+**main Mac** (not the Air): `ssh inbox` (alias in `~/.ssh/config`, user root).
+The Air's key is also authorized. Don't ask him to run anything on the Air
+except BlueBubbles/`~/inbox-mac` matters — copying commands to it is painful. Nightly `backup.sh` at 04:17 into
 `/root/server/backups`. Cloudflare tunnel `inbox` now connects from the VPS.
 
 The **MacBook Air (2013, Big Sur, Docker Desktop 4.24.2)** now only runs

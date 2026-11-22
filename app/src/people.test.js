@@ -157,3 +157,9 @@ test('delivery status: sent, delivered by the bridge, seen by them', async () =>
   assert.equal(deliveryStatus(room, later, ME), 'sent', 'a receipt on an earlier message does not cover later ones')
   assert.equal(deliveryStatus(room, { ...later, status: 'sending' }, ME), 'sending')
 })
+
+test('WhatsApp linked IDs are not phone numbers', async () => {
+  const { phoneFromUser } = await import('./networks.js')
+  assert.equal(phoneFromUser('@whatsapp_lid-210427829035057:x'), null)
+  assert.equal(phoneFromUser('@whatsapp_37061234567:x'), '37061234567')
+})

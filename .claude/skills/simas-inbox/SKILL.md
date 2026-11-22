@@ -72,6 +72,14 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   start/visibility (iOS may launch the PWA without the #hash).
 - Online/last-seen status: not available (bridges don't pass presence; Synapse presence is off).
 
+### Inbox list
+- Search field has an ✕ (and tapping the "Inbox" title) that clears search + filter and scrolls to the top.
+- Filter row: All · Unread · short app tags (WA/TG/FB/IG/iM, borderless) · Groups — fits one line.
+- App tags sit right after the name (max 2, else first + "+N"); the preview gets the full line.
+- WhatsApp "linked IDs" (`whatsapp_lid-…` ghosts, WhatsApp hiding numbers) are not phone numbers:
+  `phoneFromUser` ignores them. Readable names for those come from the bridge's
+  `displayname_template` = contact name (setup.sh).
+
 ### Which app a message goes out on (`chooseChannel`)
 
 1. a channel he picked by hand in this thread (sticks until they write from another app)

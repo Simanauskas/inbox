@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { go } from '../router.js'
 import { previewText, normName } from '../people.js'
 import { Avatar, NetBadge, TopBar, Icon, timeShort } from './common.jsx'
+import { networkInfo } from '../networks.js'
 
 export default function Inbox({ ctx, selected }) {
   const { client, model, sugg } = ctx
@@ -23,24 +24,30 @@ export default function Inbox({ ctx, selected }) {
   // messages (e.g. encrypted Messenger chats without restored history). Keep
   // those out of the way until something is said in them.
   const active = items.filter((i) => i.lastEvent || i.typing)
+  const filtered = q || filter !== 'all'
+  const home = () => { setQ(''); setFilter('all'); setShowEmpty(false); document.querySelector('.inbox .list')?.scrollTo({ top: 0, behavior: 'smooth' }) }
   const empty = items.filter((i) => !i.lastEvent && !i.typing)
 
   return (
     <div className="page inbox">
       <TopBar
-        title="Inbox"
         right={<>
           <button className="icon-btn" onClick={() => go('search')} aria-label="Search messages"><Icon name="search" /></button>
           <button className="icon-btn" onClick={() => go('settings')} aria-label="Settings"><Icon name="gear" /></button>
         </>}
-      />
+      >
+        <button className="title-btn" onClick={home} aria-label="Inbox: back to all chats"><h1>Inbox</h1></button>
+      </TopBar>
       <StatusLine client={client} />
       <div className="inbox-tools">
-        <input className="search" placeholder="Find a person" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="search-wrap">
+          <input className="search" placeholder="Find a person" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search" />
+          {filtered && <button className="search-clear" onClick={home} aria-label="Clear search and show all chats"><Icon name="close" size={16} /></button>}
+        </div>
         <div className="chips">
           {['all', 'unread', ...nets, 'groups'].map((f) => (
-            <button key={f} className={`chip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>
-              {f === 'all' ? 'All' : f === 'unread' ? 'Unread' : f === 'groups' ? 'Groups' : <NetBadge net={f} label />}
+            <button key={f} className={`chip ${['all', 'unread', 'groups'].includes(f) ? '' : 'netchip'} ${filter === f ? 'on' : ''}`} onClick={() => setFilter(filter === f && f !== 'all' ? 'all' : f)} aria-pressed={filter === f}>
+              {f === 'all' ? 'All' : f === 'unread' ? 'Unread' : f === 'groups' ? 'Groups' : <NetBadge net={f} />}
             </button>
           ))}
         </div>
@@ -85,10 +92,13 @@ function Row({ client, i, selected }) {
         <div className="row-main">
           <div className="row-top">
             <span className={`row-name ${i.unread ? 'bold' : ''}`}>{i.name}</span>
+            <span className="nets" title={i.networks.map((n) => networkInfo(n).name).join(', ')}>
+              {i.networks.slice(0, i.networks.length > 2 ? 1 : 2).map((n) => <NetBadge key={n} net={n} />)}
+              {i.networks.length > 2 && <span className="net more">+{i.networks.length - 1}</span>}
+            </span>
             <span className="row-time">{i.lastEvent ? timeShort(i.lastTs) : ''}</span>
           </div>
           <div className="row-bottom">
-            <span className="nets">{i.networks.map((n) => <NetBadge key={n} net={n} />)}</span>
             <span className={`row-preview ${i.unread ? 'bold' : ''}`}>{i.typing ? <i>typing…</i> : i.lastEvent ? previewText(i.lastEvent, client.userId) : <i>No messages yet</i>}</span>
             {i.unread > 0 && <span className="badge">{i.unread}</span>}
           </div>

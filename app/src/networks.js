@@ -51,6 +51,9 @@ export function phoneFromUser(uid) {
   const net = guessFromUser(uid)
   if (local.includes('@')) return null
   if (net !== 'whatsapp' && net !== 'imessage' && net !== 'signal') return null
+  // WhatsApp "linked IDs" (whatsapp_lid-…) are private numbers WhatsApp uses
+  // when it hides someone's phone number. They are not phone numbers.
+  if (/^[a-z]+_lid[-_=]/i.test(local)) return null
   const digits = local.slice(local.indexOf('_') + 1).replace(/^(tel|sms)[_=]/, '').replace(/\D/g, '')
   return digits.length >= 8 ? digits : null
 }

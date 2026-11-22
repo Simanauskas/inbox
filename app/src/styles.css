@@ -278,3 +278,27 @@ li:last-child .row-main { border-bottom: 0; }
 .rec-time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 38px; }
 .rec-hint { flex: 1; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-btn.danger { color: var(--danger); }
+
+/* inbox header + search */
+.title-btn { text-align: left; }
+.search-wrap { position: relative; }
+.search-wrap .search { padding-right: 38px; }
+.search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--line); color: var(--text); }
+/* compact filter chips so they fit on one line */
+.chips { gap: 5px; }
+.chip { padding: 4px 9px; font-size: 13px; }
+.chip .net { height: 18px; min-width: 24px; }
+/* app tags sit next to the name, the preview gets the whole line */
+.row-top .nets { margin-left: 2px; }
+.row-top .net { height: 15px; min-width: 20px; font-size: 9px; padding: 0 3px; border-radius: 4px; }
+.net.more { background: var(--muted); }
+.row-bottom { gap: 6px; }
+.row-top .row-name { flex: 0 1 auto; }
+.row-top .row-time { margin-left: auto; padding-left: 6px; }
+
+.chip { padding: 4px 8px; }
+.chips { gap: 4px; overflow-x: auto; }
+.chip.netchip { padding: 3px; border-color: transparent; background: transparent; }
+.chip.netchip .net { height: 22px; min-width: 28px; font-size: 11px; }
+.chip.netchip:not(.on) .net { opacity: 0.85; }
+.chip.netchip.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }

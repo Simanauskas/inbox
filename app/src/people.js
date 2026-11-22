@@ -57,10 +57,17 @@ export function classifyRoom(room, me, direct) {
   return humans.length === 1 && (room.joinedCount || 0) <= 3 ? 'dm' : 'group'
 }
 
+// Bridges like to tag names with their app, e.g. "Mel (WA)" (mautrix-whatsapp's
+// default). The app already shows which app a chat is on, and the tag stops
+// the same person from being recognised across apps, so drop it.
+export function cleanName(s) {
+  return (s || '').replace(/\s*\((?:WA|WhatsApp|TG|Telegram|FB|Facebook|Messenger|IG|Instagram|iMessage|SMS)\)\s*$/i, '').trim() || s
+}
+
 export function roomTitle(room, me) {
-  if (room.name) return room.name
+  if (room.name) return cleanName(room.name)
   const u = remoteUser(room, me) || otherMembers(room, me)[0]
-  return (u && room.members[u]?.displayname) || u || 'Chat'
+  return cleanName((u && room.members[u]?.displayname) || u || 'Chat')
 }
 
 export function lastMessage(room) {
@@ -86,7 +93,7 @@ export function unreadCount(room, me) {
 }
 
 export function normName(s) {
-  return (s || '')
+  return cleanName(s || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')

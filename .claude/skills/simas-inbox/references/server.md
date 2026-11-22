@@ -51,7 +51,9 @@ registrations with the same id), Postgres DB per bridge,
 `double_puppet.secrets[server] = "as_token:<doublepuppet token>"`,
 `encryption.allow: false`, `backfill.enabled: true`,
 `max_initial_messages: 1000`. WhatsApp: `network.history_sync.request_full_sync: true`
-(a year of history). Telegram: `network.api_id/api_hash`. Messenger:
+(a year of history) and `network.displayname_template` = your contact
+name (`.FullName`) without the default " (WA)" tag (the app also strips such
+tags with `cleanName`). Telegram: `network.api_id/api_hash`. Messenger:
 `network.e2ee_backfill: true` — most Messenger 1:1 chats are end-to-end
 encrypted, so the bridge creates their rooms but gets no history unless it
 restores Messenger's encrypted backup with his 6-digit secure-storage PIN,

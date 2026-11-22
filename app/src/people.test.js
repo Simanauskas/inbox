@@ -133,3 +133,11 @@ test('push payload becomes a readable notification', async () => {
   assert.equal(grp.options.body, '📷 Photo')
   assert.equal(notificationFromPush({ type: 'm.room.member', sender: '@whatsappbot:x', content: { membership: 'invite' } }).options.body, 'New chat')
 })
+
+test('bridge app tags are dropped from names', async () => {
+  const { cleanName } = await import('./people.js')
+  assert.equal(cleanName('Mel (WA)'), 'Mel')
+  assert.equal(cleanName('Rokas Petrauskas (Telegram)'), 'Rokas Petrauskas')
+  assert.equal(cleanName('Team (Work)'), 'Team (Work)')
+  assert.equal(normName('Mel (WA)'), normName('Mel'))
+})

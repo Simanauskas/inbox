@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { go, back } from '../router.js'
-import { chooseChannel, mergedTimeline, stripReply, previewText } from '../people.js'
+import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName } from '../people.js'
 import { networkInfo } from '../networks.js'
 import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
 
@@ -145,7 +145,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, open, 
   return (
     <div className={`msg ${mine ? 'out' : 'in'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${notice ? 'notice' : ''}`} style={{ '--net': networkInfo(net).color }}>
       {showNet && <div className="msg-net"><NetBadge net={net} label /></div>}
-      {showSender && <div className="msg-sender">{room?.members[ev.sender]?.displayname || ev.sender}</div>}
+      {showSender && <div className="msg-sender">{cleanName(room?.members[ev.sender]?.displayname || ev.sender)}</div>}
       <div className="bubble" onClick={onToggle}>
         {replyId && (
           <div className="quote">{quoted ? previewText(quoted, client.userId).replace(/^You: /, '') : 'Replying to an earlier message'}</div>

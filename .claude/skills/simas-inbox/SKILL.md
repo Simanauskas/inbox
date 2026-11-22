@@ -68,24 +68,31 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
 Replying to a specific message always goes to that message's room. The
 composer shows "Sending via <app> ▾" plus the reason.
 
-## Status (as of 21 Nov 2026)
+## Status (as of 22 Nov 2026)
 
-Done by him: Cloudflare Tunnel + public hostname, Cloudflare Pages project
-(was pointed at the old dashboard branch — must point at `Simanauskas/inbox`,
-`main`, root `app`), username `s`. Telegram API keys: told how (my.telegram.org/apps).
+**Live.** Running on a **MacBook Air (13", mid 2013, 4 GB, Intel), macOS Big
+Sur, Docker Desktop 4.24.2 with 2 GB**, in `~/Downloads/inbox-main/server`
+(the Mac's user is `ilonaradaviciute`). Cloudflare Tunnel and Pages
+(`Simanauskas/inbox`, `main`, root `app`) are set up; he signs in as `s`.
+WhatsApp, Telegram, Messenger, Instagram connected and imported overnight
+(Postgres wrote ~4.6 GB; while importing, Synapse sat at 100% of one core).
+iMessage bridge runs against BlueBubbles Server 1.9.12 on the same Mac.
+He updates server files by downloading single files from GitHub ("Download
+raw file") into that folder and re-running `./setup.sh`.
 
-Server hardware: a **MacBook Air (13", mid 2013, 4 GB, Intel)** being upgraded
-from High Sierra to **Big Sur 11** (newest it supports — the App Store offering
-Sequoia won't install). Plan: **Docker Desktop 4.24.2** (or 4.22; last ones for
-Big Sur, no updates) with memory set to 2 GB, then `./setup.sh`, BlueBubbles
-on the same Mac. 4 GB is tight; if it struggles, move `server/data` to a
-€4.50 Hetzner server and keep the Mac only for BlueBubbles. He's also
-considering a used **Mac mini — recommend M1/M2 with 16 GB** (M1 8 GB is
-enough for Inbox alone; avoid Intel 2018 and older).
+Open questions: he felt not everything synced (asked which app/chats — no
+answer yet; note backfill only happens once per chat on a normal Synapse, so
+scrolling up can't fetch older history). `curl https://matrix.simas.fit/_matrix/client/versions`
+from the Air returned 404 while app traffic through the tunnel works —
+unexplained. Notifications: told to turn on after imports finished.
+
+If the Air is too slow day to day: a used **Mac mini M1/M2 with 16 GB** (M1
+8 GB is enough for Inbox alone; avoid Intel 2018 and older), or move
+`server/data` + the `inbox_pgdata` volume to a €4.50 Hetzner server and keep
+the Mac only for BlueBubbles.
 
 Not built yet: starting a brand-new chat from the app (use the bridge bot's
-commands), recording voice messages. Real bridges have never run against his
-accounts yet — expect small fixes on first run.
+commands), recording voice messages.
 
 ## Working on it
 

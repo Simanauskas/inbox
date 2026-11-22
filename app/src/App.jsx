@@ -10,7 +10,31 @@ import Merge from './ui/Merge.jsx'
 import Settings from './ui/Settings.jsx'
 import Search from './ui/Search.jsx'
 import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from './push.js'
-import { idbGet, idbDel } from './idb.js'
+import { idbGet, idbDel, idbSet } from './idb.js'
+import { indexContacts } from './contacts.js'
+
+// Your phone book: the server puts it (from BlueBubbles on the Mac) in your
+// Matrix media and points to it from account data fit.simas.inbox.contacts.
+// Kept on the device so names are right straight away.
+export const CONTACTS_TYPE = 'fit.simas.inbox.contacts'
+function usePhoneBook(client, url) {
+  const [idx, setIdx] = useState(null)
+  useEffect(() => {
+    let live = true
+    idbGet('contacts').then(async (cached) => {
+      if (cached?.data && live) { const i = indexContacts(cached.data); client.contactIdx = i; setIdx(i) }
+      if (!url || cached?.url === url) return
+      try {
+        const blobUrl = await client.mediaUrl(url, { download: true })
+        const data = await (await fetch(blobUrl)).json()
+        await idbSet('contacts', { url, data })
+        if (live) { const i = indexContacts(data); client.contactIdx = i; setIdx(i) }
+      } catch {}
+    })
+    return () => { live = false }
+  }, [client, url])
+  return idx
+}
 
 // Open the chat a notification was for (straight into the thread).
 function openFromNotification(hash) {
@@ -35,7 +59,7 @@ export default function App() {
   if (!session) {
     return <Login onLogin={(s) => { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)) } catch {} setSession(s) }} />
   }
-  return <Main key={session.accessToken} session={session} onLogout={() => { try { localStorage.removeItem(SESSION_KEY) } catch {} saveSessionForWorker(null); setSession(null) }} />
+  return <Main key={session.accessToken} session={session} onLogout={() => { try { localStorage.removeItem(SESSION_KEY) } catch {} saveSessionForWorker(null); idbDel('contacts'); setSession(null) }} />
 }
 
 function useHashRoute() {
@@ -67,10 +91,11 @@ function Main({ session, onLogout }) {
     return () => mq.removeEventListener('change', on)
   }, [])
 
+  const contactIdx = usePhoneBook(client, client.accountData[CONTACTS_TYPE]?.url)
   const model = useMemo(
-    () => buildModel(client.rooms, client.accountData, client.userId, client.accountData[PEOPLE_TYPE]),
+    () => buildModel(client.rooms, client.accountData, client.userId, client.accountData[PEOPLE_TYPE], contactIdx),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [version],
+    [version, contactIdx],
   )
   const sugg = useMemo(() => suggestions(model), [model])
 
@@ -100,7 +125,7 @@ function Main({ session, onLogout }) {
     client.onMessage = (room, ev) => {
       if (pushEnabled()) return
       if (document.visibilityState === 'visible' || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-      const m = buildModel(client.rooms, client.accountData, client.userId, client.accountData[PEOPLE_TYPE])
+      const m = buildModel(client.rooms, client.accountData, client.userId, client.accountData[PEOPLE_TYPE], client.contactIdx)
       const item = m.items.find((i) => i.rooms.includes(room.id))
       if (!item) return
       const title = `${item.name} · ${networkInfo(m.info[room.id].network).name}`

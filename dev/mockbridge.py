@@ -236,6 +236,16 @@ def receipt(net, person, who):
     req("POST", f"/_matrix/client/v3/rooms/{urllib.parse.quote(room)}/receipt/m.read/{urllib.parse.quote(eid)}", {}, user=user)
 
 
+def contacts():
+    """Give the app a phone book, like server/contacts.py does on the real server."""
+    book = {"v": 1, "contacts": [{"id": "1", "n": "Rokas P. (tennis)", "p": ["8 612 34567"], "e": []}]}
+    url = HS + "/_matrix/media/v3/upload?" + urllib.parse.urlencode({"filename": "contacts.json", "user_id": ME})
+    rq = urllib.request.Request(url, data=json.dumps(book).encode(), method="POST", headers={"Authorization": f"Bearer {AS_TOKEN}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(rq) as resp:
+        mxc = json.loads(resp.read())["content_uri"]
+    req("PUT", f"/_matrix/client/v3/user/{urllib.parse.quote(ME)}/account_data/fit.simas.inbox.contacts", {"url": mxc, "count": 1}, user=ME)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "seed"
     if cmd == "seed":
@@ -246,6 +256,8 @@ if __name__ == "__main__":
         print(STATE.read_text())
     elif cmd == "messages":
         messages(sys.argv[2], sys.argv[3])
+    elif cmd == "contacts":
+        contacts()
     elif cmd == "delivered":
         receipt(sys.argv[2], sys.argv[3], "bot")
     elif cmd == "read":

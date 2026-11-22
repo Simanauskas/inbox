@@ -40,6 +40,11 @@ assert(rows === 6, `inbox has 6 entries after merging (4 people + Tomas + group)
 assert(await page.getByRole('button', { name: 'Show 1 chat with no messages yet' }).isVisible(), 'chat with no messages is tucked away at the bottom')
 await page.screenshot({ path: `${out}/3-inbox-merged.png` })
 
+// your phone book names people: Rokas is saved as "Rokas P. (tennis)" in contacts
+mock('contacts')
+await page.locator('.row-name', { hasText: 'Rokas P. (tennis)' }).waitFor({ timeout: 10000 })
+assert(true, 'name comes from your phone book (Rokas P. (tennis)), not from the app')
+
 await page.locator('.row', { hasText: 'Rokas' }).click()
 await page.locator('.ch-pick').first().waitFor()
 await page.waitForTimeout(800)
@@ -100,6 +105,7 @@ assert(voiceSent, 'voice message recorded and sent to Telegram')
 
 await page.locator('.thread-name').click()
 await page.getByText('Make default').first().waitFor()
+assert(await page.getByText('Named as in').isVisible(), 'contact page says the name comes from your contacts')
 await page.screenshot({ path: `${out}/7-person.png` })
 
 await page.goto(APP + '/#/settings')

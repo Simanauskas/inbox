@@ -57,3 +57,10 @@ export function phoneFromUser(uid) {
   const digits = local.slice(local.indexOf('_') + 1).replace(/^(tel|sms)[_=]/, '').replace(/\D/g, '')
   return digits.length >= 8 ? digits : null
 }
+
+// An email hidden in a ghost user id, e.g. @imessage_rokas=40gmail.com:server
+export function emailFromUser(uid) {
+  const local = (uid?.slice(1).split(':')[0] || '').replace(/=([0-9a-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  const rest = local.slice(local.indexOf('_') + 1).replace(/^mailto[_:]/, '')
+  return /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(rest) ? rest.toLowerCase() : null
+}

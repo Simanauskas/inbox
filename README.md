@@ -158,6 +158,15 @@ unread count. Bridges import old history when you connect an app; those old
 messages don't buzz one by one but show as a single silent "Importing older
 messages…" notification. Invites to newly imported chats don't notify at all.
 
+## 6. Names from your contacts
+
+People show up the way you saved them in your iPhone/iCloud contacts. The
+server reads your contacts from BlueBubbles on the Mac every 15 minutes
+(`server/contacts.sh`, set up by `setup.sh`); if you rename someone in Inbox,
+your name wins. On a person's page Inbox can **add them to your contacts** or
+**update their card** with numbers/emails it learned from the apps — your
+iPhone asks first; nothing is changed on its own.
+
 ## Updating
 
 ```bash

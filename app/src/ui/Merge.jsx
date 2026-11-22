@@ -11,7 +11,12 @@ export default function Merge({ ctx }) {
   // apply several suggestions in one account-data write
   function apply(list) {
     let c = normConfig(client.accountData[PEOPLE_TYPE])
-    for (const s of list) c = mergePeople(c, s.members, s.name, s.defaultRoom || mostRecentRoom(ctx, s)).config
+    for (const s of list) {
+      const r = mergePeople(c, s.members, s.name, s.defaultRoom || mostRecentRoom(ctx, s))
+      c = r.config
+      // a name you typed here is yours; otherwise the phone book decides
+      if (s.custom) c.people[r.personId].nameSource = 'user'
+    }
     client.setAccountData(PEOPLE_TYPE, c).catch((e) => setErr(e.message))
   }
 
@@ -21,7 +26,7 @@ export default function Merge({ ctx }) {
       <div className="scroll">
         <p className="hint">These look like the same person on different apps. Combining them gives you one thread with all the history. Pick the app new messages should go to by default.</p>
         {err && <p className="error">{err}</p>}
-        {sugg.map((s) => <Suggestion key={s.key} ctx={ctx} s={s} onMerge={(name, def) => apply([{ ...s, name, defaultRoom: def }])}
+        {sugg.map((s) => <Suggestion key={s.key} ctx={ctx} s={s} onMerge={(name, def) => apply([{ ...s, name, defaultRoom: def, custom: name !== s.name }])}
           onDismiss={() => client.setAccountData(PEOPLE_TYPE, dismissSuggestion(client.accountData[PEOPLE_TYPE], s.key)).catch((e) => setErr(e.message))} />)}
         {!sugg.length && <p className="empty">Nothing to combine right now. You can link chats by hand from a contact's page.</p>}
       </div>

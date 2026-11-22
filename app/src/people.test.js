@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildModel, suggestions, mergePeople, chooseChannel, mergedTimeline, normName, unlinkRoom, stripReply } from './people.js'
+import { buildModel, suggestions, mergePeople, chooseChannel, mergedTimeline, normName, unlinkRoom, stripReply, renamePerson } from './people.js'
 
 const ME = '@simas:x'
 const H = 3600_000
@@ -162,4 +162,42 @@ test('WhatsApp linked IDs are not phone numbers', async () => {
   const { phoneFromUser } = await import('./networks.js')
   assert.equal(phoneFromUser('@whatsapp_lid-210427829035057:x'), null)
   assert.equal(phoneFromUser('@whatsapp_37061234567:x'), '37061234567')
+})
+
+test('phone book: names, matching and merging', async () => {
+  const { indexContacts, normalizePhone, missingFromCard, vcard } = await import('./contacts.js')
+  const { clearCustomName } = await import('./people.js')
+  assert.equal(normalizePhone('8 612 34567'), '37061234567')
+  assert.equal(normalizePhone('+370 (612) 34 567'), '37061234567')
+  assert.equal(normalizePhone('612 34567'), '37061234567')
+  const idx = indexContacts({ contacts: [
+    { n: 'Rokas P. (tennis)', p: ['8 612 34567'], e: ['rokas@example.com'] },
+    { n: 'Mantas Jonaitis', p: [] },
+    { n: 'Tomas', p: [] },
+  ] })
+  const r = {
+    wa: room('wa', 'whatsapp', '@whatsapp_37061234567:x', 'Rocky 💪', [msg('@whatsapp_37061234567:x', now)]),
+    im: room('im', 'imessage', '@imessage_rokas=40example.com:x', 'rokas@example.com', [msg('@imessage_rokas=40example.com:x', now - H)]),
+    ig: room('ig', 'instagram', '@instagram_9:x', 'Mantas Jonaitis', [msg('@instagram_9:x', now - 2 * H)]),
+    fb: room('fb', 'facebook', '@facebook_7:x', 'Tomas', [msg('@facebook_7:x', now - 3 * H)]),
+  }
+  const m = buildModel(r, {}, ME, null, idx)
+  const name = (id) => m.items.find((i) => i.rooms.includes(id)).name
+  assert.equal(name('wa'), 'Rokas P. (tennis)', 'phone book beats the name they chose on WhatsApp')
+  assert.equal(name('im'), 'Rokas P. (tennis)', 'iMessage email matched to the same card')
+  assert.equal(name('ig'), 'Mantas Jonaitis', 'unique full name matches on Instagram')
+  assert.equal(name('fb'), 'Tomas', 'single first names are never used to match')
+  assert.equal(m.info.fb.contact, null)
+  const s = suggestions(m)
+  assert.ok(s.some((x) => x.rooms.includes('wa') && x.rooms.includes('im')), 'same contact card → suggest combining')
+  // a name you typed wins over the phone book, and can be reset
+  const p = m.items.find((i) => i.rooms.includes('wa'))
+  const c1 = renamePerson(null, p, 'Rokas')
+  const m2 = buildModel(r, {}, ME, c1, idx)
+  assert.equal(m2.items.find((i) => i.rooms.includes('wa')).name, 'Rokas')
+  const m3 = buildModel(r, {}, ME, clearCustomName(c1, m2.items.find((i) => i.rooms.includes('wa'))), idx)
+  assert.equal(m3.items.find((i) => i.rooms.includes('wa')).name, 'Rokas P. (tennis)')
+  // what the apps know that the card doesn't
+  assert.deepEqual(missingFromCard(idx.list[0], { phones: ['37061234567', '37069999999'], emails: ['ROKAS@example.com'] }), { phones: ['37069999999'], emails: [] })
+  assert.match(vcard({ name: 'Jonas Bernotas', phones: ['37065666144'] }), /FN:Jonas Bernotas\r\nN:Bernotas;Jonas;;;\r\nTEL;TYPE=CELL:\+37065666144/)
 })

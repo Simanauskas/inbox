@@ -3,6 +3,7 @@ import { go, back } from '../router.js'
 import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus } from '../people.js'
 import { networkInfo } from '../networks.js'
 import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
+import { ContactPrompt } from './PhoneBook.jsx'
 
 // manual channel picks survive navigating away and back (per person, this session)
 const overrides = new Map()
@@ -118,6 +119,7 @@ export default function Thread({ ctx, item }) {
           </div>
         </div>
       </TopBar>
+      <ContactPrompt ctx={ctx} item={item} />
       <div className="timeline" ref={scroller} onScroll={onScroll} onClick={() => setActive(null)}>
         {hasMore ? <div className="older">{loading ? <div className="spinner small" /> : <button onClick={loadOlder}>Load older messages</button>}</div>
           : <div className="older muted">Start of your history</div>}

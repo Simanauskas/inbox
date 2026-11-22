@@ -275,6 +275,13 @@ fi
 say "Starting everything ($COMPOSE_PROFILES)"
 docker compose up -d
 
+# your phone book → the app (names as saved in your contacts), every 15 minutes
+if [ -n "${BLUEBUBBLES_PASSWORD:-}" ] && [ -x ./contacts.sh ]; then
+  say "Syncing your contacts from BlueBubbles"
+  ./contacts.sh || echo "Couldn't read contacts from BlueBubbles yet; it retries every 15 minutes."
+  ./contacts.sh --install
+fi
+
 cat <<EOF
 
 Done. Your Matrix server is running.

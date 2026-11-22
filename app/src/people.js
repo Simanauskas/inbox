@@ -1,6 +1,7 @@
 // Turns bridged rooms into people: one entry per person, however many apps
 // they message you on. Pure functions so they can be unit tested.
-import { networkOf, isBotUser, phoneFromUser } from './networks.js'
+import { networkOf, isBotUser, phoneFromUser, emailFromUser } from './networks.js'
+import { contactFor } from './contacts.js'
 
 export const DEFAULT_CONFIG = { version: 1, people: {}, dismissed: [], replyWindowHours: 12 }
 
@@ -102,7 +103,9 @@ export function normName(s) {
 }
 
 // Everything the inbox list needs, built from the client's rooms + saved people.
-export function buildModel(rooms, accountData, me, rawConfig) {
+// contactIdx: your phone book (indexContacts), used for names and matching.
+// Name priority: a name you typed in Inbox > your phone book > what the app says.
+export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null) {
   const config = normConfig(rawConfig)
   const direct = directRoomIds(accountData)
   const info = {} // roomId -> { kind, network, title, remote, phone, lastTs }
@@ -110,9 +113,12 @@ export function buildModel(rooms, accountData, me, rawConfig) {
     if (room.membership !== 'join') continue
     const kind = classifyRoom(room, me, direct)
     const remote = kind === 'dm' ? remoteUser(room, me) : null
+    const title = roomTitle(room, me)
+    const phone = remote ? phoneFromUser(remote) : null
+    const email = remote ? emailFromUser(remote) : null
     info[room.id] = {
-      kind, network: networkOf(room), title: roomTitle(room, me), remote,
-      phone: remote ? phoneFromUser(remote) : null, lastTs: lastActivity(room),
+      kind, network: networkOf(room), title, remote, phone, email, lastTs: lastActivity(room),
+      contact: kind === 'dm' ? contactFor(contactIdx, { phone, email, names: [title, remote && cleanName(room.members[remote]?.displayname)] }) : null,
     }
   }
 
@@ -126,14 +132,18 @@ export function buildModel(rooms, accountData, me, rawConfig) {
 
   const items = []
   for (const { pid, p, rooms: prs } of people) {
-    items.push(makeItem(`p:${pid}`, 'person', p.name || info[prs[0]].title, prs, rooms, info, me, { personId: pid, defaultRoom: prs.includes(p.defaultRoom) ? p.defaultRoom : null }))
+    const contact = prs.map((id) => info[id].contact).find(Boolean) || null
+    const [name, nameSource] = p.nameSource === 'user' && p.name ? [p.name, 'user']
+      : contact ? [contact.n, 'contacts'] : [p.name || info[prs[0]].title, 'app']
+    items.push(makeItem(`p:${pid}`, 'person', name, prs, rooms, info, me, { personId: pid, defaultRoom: prs.includes(p.defaultRoom) ? p.defaultRoom : null, contact, nameSource }))
   }
   const connections = []
   for (const [id, i] of Object.entries(info)) {
     if (owner[id]) continue
     if (i.kind === 'connection') { connections.push(makeItem(`r:${id}`, 'connection', i.title, [id], rooms, info, me)); continue }
     if (i.kind === 'space') continue
-    items.push(makeItem(`r:${id}`, i.kind === 'dm' ? 'person' : 'group', i.title, [id], rooms, info, me))
+    items.push(makeItem(`r:${id}`, i.kind === 'dm' ? 'person' : 'group', i.contact?.n || i.title, [id], rooms, info, me,
+      { contact: i.contact, nameSource: i.contact ? 'contacts' : 'app' }))
   }
   items.sort((a, b) => b.lastTs - a.lastTs)
   return { items, connections, info, config, owner }
@@ -171,7 +181,14 @@ export function suggestions(model) {
   const union = (a, b) => parent.set(find(a), find(b))
   const byName = new Map()
   const byPhone = new Map()
+  const byContact = new Map()
   for (const p of people) {
+    // the same contact card (e.g. WhatsApp number + iMessage email) is the same person
+    for (const id of p.rooms) {
+      const c = info[id].contact
+      if (!c) continue
+      if (byContact.has(c)) union(p.key, byContact.get(c)); else byContact.set(c, p.key)
+    }
     const keys = new Set([normName(p.name), ...p.rooms.map((id) => normName(info[id].title))].filter((k) => k.length >= 2))
     for (const k of keys) { if (byName.has(k)) union(p.key, byName.get(k)); else byName.set(k, p.key) }
     for (const id of p.rooms) {
@@ -198,7 +215,8 @@ export function suggestions(model) {
     const named = members.find((m) => m.personId)
     // ...then the longest name, preferring the spelling with diacritics (Eglė over Egle)
     const score = (n) => n.length * 10 + (n.match(/[^\x00-\x7f]/g) || []).length
-    const name = named?.name || [...members].sort((a, b) => score(b.name) - score(a.name))[0].name
+    const fromContacts = members.find((m) => m.contact)?.contact?.n
+    const name = members.find((m) => m.nameSource === 'user')?.name || fromContacts || named?.name || [...members].sort((a, b) => score(b.name) - score(a.name))[0].name
     out.push({ key, name, members, rooms })
   }
   return out
@@ -248,7 +266,15 @@ export function setDefault(rawConfig, item, roomId) {
 export function renamePerson(rawConfig, item, name) {
   const { config, personId } = ensurePerson(rawConfig, item)
   config.people[personId].name = name
+  config.people[personId].nameSource = 'user'
   return config
+}
+
+// Go back to the phone-book name (or the app's, if they aren't in your contacts).
+export function clearCustomName(rawConfig, item) {
+  const c = normConfig(rawConfig)
+  if (item.personId && c.people[item.personId]) delete c.people[item.personId].nameSource
+  return c
 }
 
 export function dismissSuggestion(rawConfig, key) {

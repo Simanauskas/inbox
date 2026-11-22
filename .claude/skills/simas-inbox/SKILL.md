@@ -72,6 +72,20 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   start/visibility (iOS may launch the PWA without the #hash).
 - Online/last-seen status: not available (bridges don't pass presence; Synapse presence is off).
 
+### Names & the phone book (his rule: he decides; default = his iCloud contacts)
+- Priority: a name he typed in Inbox (`people[pid].nameSource = 'user'`, set by renaming on the
+  contact page or editing the name when combining) > his phone book > the app's name.
+  "Use the name from your contacts" clears `nameSource`.
+- Phone book: `server/contacts.py` (cron every 15 min via `contacts.sh --install`, also run by
+  setup.sh) reads contacts from BlueBubbles (`/api/v1/contact`), uploads them as a JSON media file
+  as @s (double-puppet as_token) and points account data `fit.simas.inbox.contacts` {url,count,sha256}
+  at it; only re-uploads on change. The app (`app/src/contacts.js`, `usePhoneBook` in App.jsx) caches
+  it in IndexedDB and matches chats by phone (last 9 digits; LT "8 6…" handled), iMessage email, or an
+  exact *unique full* name for Messenger/Instagram/Telegram. Same contact card ⇒ merge suggestion.
+- Contact cards are never edited automatically: the contact page offers "Add to contacts" /
+  "Update contact card" (vCard → iPhone's own create/add-to-existing sheet), and a chat shows a
+  dismissible "Save X to your contacts?" only if both sides wrote ≥3 messages.
+
 ### Inbox list
 - Search field has an ✕ (and tapping the "Inbox" title) that clears search + filter and scrolls to the top.
 - Filter row: All · Unread · short app tags (WA/TG/FB/IG/iM, borderless) · Groups — fits one line.

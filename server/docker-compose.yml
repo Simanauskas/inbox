@@ -81,6 +81,29 @@ services:
     extra_hosts: [host.docker.internal:host-gateway]
     profiles: [imessage]
 
+  # Your phone book for the app: reads iCloud contacts (CardDAV) every 10 minutes
+  # — or BlueBubbles on the Mac as a fallback — and writes contact-card changes
+  # you confirm in Inbox back to iCloud. See contacts.py.
+  contacts:
+    image: python:3-alpine
+    restart: unless-stopped
+    command: [python, /app/contacts.py, --loop]
+    environment:
+      ICLOUD_USER: ${ICLOUD_USER:-}
+      ICLOUD_APP_PASSWORD: ${ICLOUD_APP_PASSWORD:-}
+      ICLOUD_CARDDAV_URL: ${ICLOUD_CARDDAV_URL:-}
+      BLUEBUBBLES_URL: ${BLUEBUBBLES_URL:-}
+      BLUEBUBBLES_PASSWORD: ${BLUEBUBBLES_PASSWORD:-}
+      USER_ID: "@${ADMIN_USER}:${SERVER_NAME}"
+    volumes:
+      - ./contacts.py:/app/contacts.py:ro
+      - ./data/synapse/doublepuppet.yaml:/app/doublepuppet.yaml:ro
+      - ./data/contacts:/state
+    extra_hosts: [host.docker.internal:host-gateway]
+    depends_on:
+      synapse: { condition: service_healthy }
+    profiles: [contacts]
+
   # Push gateway: turns Synapse's notifications into Web Push messages, so the
   # app notifies you even when it's closed.
   sygnal:

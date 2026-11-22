@@ -39,12 +39,14 @@ BLUEBUBBLES_URL=${BLUEBUBBLES_URL:-http://host.docker.internal:1234}
 export BLUEBUBBLES_URL
 profiles=$BRIDGES
 [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ] && profiles="$profiles tunnel"
+# your phone book for the app: iCloud contacts (or BlueBubbles on the Mac as a fallback)
+if [ -n "${ICLOUD_USER:-}" ] && [ -n "${ICLOUD_APP_PASSWORD:-}" ] || [ -n "${BLUEBUBBLES_PASSWORD:-}" ]; then profiles="$profiles contacts"; fi
 COMPOSE_PROFILES=$(echo $profiles | tr ' ' ',')
 setenv COMPOSE_PROFILES "$COMPOSE_PROFILES"
 export COMPOSE_PROFILES POSTGRES_PASSWORD
 
 DATA="$PWD/data"
-mkdir -p "$DATA/synapse"
+mkdir -p "$DATA/synapse" "$DATA/contacts"
 # Helpers that run inside containers, so file ownership never gets in the way.
 yq() { docker run --rm -i --user root -v "$DATA:/data" -e SERVER_NAME -e MATRIX_HOST -e ADMIN_USER -e POSTGRES_PASSWORD -e DP_TOKEN -e TELEGRAM_API_ID -e TELEGRAM_API_HASH -e BLUEBUBBLES_URL -e BLUEBUBBLES_PASSWORD -e ADMIN_REGEX -e VAPID_PUBLIC_KEY mikefarah/yq:4 "$@"; }
 inside() { docker run --rm -i -v "$DATA:/data" alpine:3 sh -c "$1"; }
@@ -275,12 +277,8 @@ fi
 say "Starting everything ($COMPOSE_PROFILES)"
 docker compose up -d
 
-# your phone book → the app (names as saved in your contacts), every 15 minutes
-if [ -n "${BLUEBUBBLES_PASSWORD:-}" ] && [ -x ./contacts.sh ]; then
-  say "Syncing your contacts from BlueBubbles"
-  ./contacts.sh || echo "Couldn't read contacts from BlueBubbles yet; it retries every 15 minutes."
-  ./contacts.sh --install
-fi
+# the old cron-based contacts sync is replaced by the contacts service
+( crontab -l 2>/dev/null | grep -v '/contacts.sh' ) | crontab - 2>/dev/null || true
 
 cat <<EOF
 

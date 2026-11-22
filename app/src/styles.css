@@ -343,3 +343,9 @@ li:last-child .row-main { border-bottom: 0; }
 .inbox-head .search { padding: 8px 32px 8px 12px; font-size: 16px; }
 .inbox .inbox-tools { padding-top: 4px; }
 .inbox .chips { padding-top: 4px; }
+/* contact card confirmation */
+.confirm-card h3 { margin: 4px 4px 0; }
+.confirm-card .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.confirm-card .field input { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px; }
+.confirm-card .details { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.confirm-card p { margin: 0; }

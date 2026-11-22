@@ -210,6 +210,67 @@ await page.goto(APP + '/')
 await page.locator('.thread-head', { hasText: 'Mantas' }).waitFor({ timeout: 5000 })
 assert(true, 'notification tap opens the chat directly, even if the app starts at its home page')
 
+// iCloud contacts, with the real server/contacts.py against a stand-in CardDAV
+// server (Radicale on DAV_URL, any login): saving a new contact and adding a
+// number to an existing card, each only after confirming
+const DAV = process.env.DAV_URL || 'http://localhost:5232'
+const davUp = await fetch(DAV + '/').then(() => true, () => false)
+if (!davUp) console.log(`skip - iCloud contacts (no CardDAV server at ${DAV})`)
+else {
+  const auth = { Authorization: 'Basic ' + Buffer.from('simas:x').toString('base64') }
+  const book = `${DAV}/simas/inbox-e2e/`
+  await fetch(book, { method: 'DELETE', headers: auth })
+  await fetch(book, { method: 'MKCOL', headers: { ...auth, 'Content-Type': 'application/xml' }, body: '<?xml version="1.0"?><mkcol xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav"><set><prop><resourcetype><collection/><C:addressbook/></resourcetype></prop></set></mkcol>' })
+  for (const [id, lines] of [['rokas', ['FN:Rokas P. (tennis)', 'N:P.;Rokas;;;', 'TEL;TYPE=CELL:8 612 34567']], ['egle', ['FN:Eglė Žemaitė', 'N:Žemaitė;Eglė;;;', 'EMAIL:egle@example.com']]]) {
+    await fetch(`${book}${id}.vcf`, { method: 'PUT', headers: { ...auth, 'Content-Type': 'text/vcard' }, body: ['BEGIN:VCARD', 'VERSION:3.0', `UID:${id}`, ...lines, 'END:VCARD', ''].join('\r\n') })
+  }
+  const asToken = fs.readFileSync(path.join(here, 'data', 'mockbridge.yaml'), 'utf8').match(/as_token: "([^"]+)"/)[1]
+  const service = () => execFileSync('python3', [path.join(here, '..', 'server', 'contacts.py'), '--once'], {
+    encoding: 'utf8',
+    env: { ...process.env, HS: 'http://localhost:8008', AS_TOKEN: asToken, USER_ID: '@simas:inbox.test', ICLOUD_USER: 'simas', ICLOUD_APP_PASSWORD: 'x', ICLOUD_CARDDAV_URL: DAV + '/', STATE: path.join(out, 'contacts.state') },
+  })
+  console.log(service().trim().replace(/^/gm, '  contacts.py: '))
+
+  // Ilona isn't in the phone book: add her, under a name you choose
+  await page.goto(APP + '/#/')
+  await page.locator('.row', { hasText: 'Ilona' }).click()
+  await page.locator('.thread-name').click()
+  await page.getByRole('button', { name: 'Add to contacts' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Contact card' })
+  await sheet.getByText('+37069876543').waitFor()
+  await sheet.getByLabel('Name').fill('Ilona (gym)')
+  await sheet.getByRole('button', { name: 'Save to iCloud' }).waitFor()
+  await page.screenshot({ path: `${out}/10-save-contact.png` })
+  await sheet.getByRole('button', { name: 'Save to iCloud' }).click()
+  await sheet.getByText('Saving to iCloud').waitFor()
+  console.log(service().trim().replace(/^/gm, '  contacts.py: '))
+  await sheet.getByText(/Saved to iCloud \(created\)/).waitFor({ timeout: 10000 })
+  assert(true, 'new contact is saved to iCloud after you confirm, and the app says so')
+  await sheet.getByRole('button', { name: 'Close' }).click()
+  await page.getByText('Named as in').waitFor({ timeout: 10000 })
+  assert(await page.getByLabel('Name', { exact: true }).inputValue() === 'Ilona (gym)', 'she is now called by the name you saved')
+  const listing = await (await fetch(book, { method: 'PROPFIND', headers: { ...auth, Depth: '1' } })).text()
+  const created = [...listing.matchAll(/<href>([^<]+\.vcf)<\/href>/g)].map((m) => m[1]).filter((h) => !/rokas|egle/.test(h))
+  const card = await (await fetch(new URL(created[0], DAV), { headers: auth })).text()
+  assert(card.includes('FN:Ilona (gym)') && card.includes('+37069876543'), 'the card on the CardDAV server has her name and number')
+
+  // Eglė is saved with only an email: offer to add the WhatsApp number to her card
+  await page.goto(APP + '/#/')
+  await page.locator('.row', { hasText: 'Eglė' }).click()
+  await page.locator('.thread-name').click()
+  await page.getByRole('button', { name: 'Update contact card' }).click()
+  await sheet.getByText('+37065554433').waitFor()
+  await sheet.getByRole('button', { name: 'Save to iCloud' }).click()
+  await sheet.getByText('Saving to iCloud').waitFor()
+  console.log(service().trim().replace(/^/gm, '  contacts.py: '))
+  await sheet.getByText(/Saved to iCloud \(updated/).waitFor({ timeout: 10000 })
+  await sheet.getByRole('button', { name: 'Close' }).click()
+  const egle = await (await fetch(`${book}egle.vcf`, { headers: auth })).text()
+  assert(egle.includes('37065554433') && egle.includes('EMAIL:egle@example.com'), 'existing card gets the number, keeping what was on it')
+  await page.getByRole('button', { name: 'Update contact card' }).waitFor({ state: 'detached', timeout: 10000 })
+  assert(true, 'nothing left to suggest once the card has it')
+}
+
 // desktop layout (fresh context; give the first sync a moment to pick up the merge)
 const desk = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: await ctx.storageState() })
 const dp = await desk.newPage()

@@ -160,12 +160,23 @@ messages…" notification. Invites to newly imported chats don't notify at all.
 
 ## 6. Names from your contacts
 
-People show up the way you saved them in your iPhone/iCloud contacts. The
-server reads your contacts from BlueBubbles on the Mac every 15 minutes
-(`server/contacts.sh`, set up by `setup.sh`); if you rename someone in Inbox,
-your name wins. On a person's page Inbox can **add them to your contacts** or
-**update their card** with numbers/emails it learned from the apps — your
-iPhone asks first; nothing is changed on its own.
+People show up the way you saved them in your iPhone contacts; if you rename
+someone in Inbox, your name wins.
+
+The `contacts` service on the server reads your **iCloud contacts** directly
+(CardDAV, every 10 minutes). In `server/.env` set `ICLOUD_USER` (your Apple ID
+email) and `ICLOUD_APP_PASSWORD`, an app-specific password from
+[appleid.apple.com](https://appleid.apple.com) → Sign-In and Security →
+App-Specific Passwords, then run `./setup.sh` again. Without them it reads the
+contacts from BlueBubbles on the Mac instead (read-only).
+
+On a person's page Inbox can **add them to your contacts** or **update their
+card** with numbers/emails it learned from the apps. It shows exactly what
+will be saved (you can change the name and untick details), and nothing
+changes until you tap **Save to iCloud**. Existing details on a card are never
+removed. Chats only suggest saving people you actually talk with (both of you
+wrote 3+ messages). Without iCloud access the same buttons hand a contact card
+to your iPhone instead.
 
 ## Updating
 

@@ -8,6 +8,9 @@ import { PhoneBookCard } from './PhoneBook.jsx'
 export default function Person({ ctx, item }) {
   const { client, model } = ctx
   const [name, setName] = useState(item.name)
+  // follow the name when it changes elsewhere (e.g. a contact card was saved),
+  // so leaving the field never writes back a stale one
+  useEffect(() => { if (document.activeElement?.getAttribute('aria-label') !== 'Name') setName(item.name) }, [item.name])
   const [picking, setPicking] = useState(false)
   const [q, setQ] = useState('')
   const [err, setErr] = useState(null)

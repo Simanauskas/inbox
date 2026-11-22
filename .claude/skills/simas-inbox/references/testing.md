@@ -17,6 +17,12 @@
   suggestions (4), combine all (6 entries), reply routed to Telegram then to
   WhatsApp after he writes there, manual pick sticks, desktop layout.
   Needs a fresh `dev/reset.sh` each run (it merges everything).
+  iCloud contacts part: runs the real `server/contacts.py --once` against a
+  stand-in CardDAV server at `DAV_URL` (default http://localhost:5232; skipped
+  if nothing answers). Radicale: `python3 -m venv v && v/bin/pip install radicale`,
+  config `[server] hosts=0.0.0.0:5232`, `[auth] type=none`, `[storage]
+  filesystem_folder=…`. The test recreates book `/simas/inbox-e2e/` (Rokas, Eglė
+  with only an email), adds Ilona as a new card and adds Eglė's WhatsApp number.
 
 ## Push tests (need the full server, not the dev one)
 

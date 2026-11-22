@@ -90,15 +90,26 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
 - Priority: a name he typed in Inbox (`people[pid].nameSource = 'user'`, set by renaming on the
   contact page or editing the name when combining) > his phone book > the app's name.
   "Use the name from your contacts" clears `nameSource`.
-- Phone book: `server/contacts.py` (cron every 15 min via `contacts.sh --install`, also run by
-  setup.sh) reads contacts from BlueBubbles (`/api/v1/contact`), uploads them as a JSON media file
-  as @s (double-puppet as_token) and points account data `fit.simas.inbox.contacts` {url,count,sha256}
-  at it; only re-uploads on change. The app (`app/src/contacts.js`, `usePhoneBook` in App.jsx) caches
-  it in IndexedDB and matches chats by phone (last 9 digits; LT "8 6…" handled), iMessage email, or an
-  exact *unique full* name for Messenger/Instagram/Telegram. Same contact card ⇒ merge suggestion.
-- Contact cards are never edited automatically: the contact page offers "Add to contacts" /
-  "Update contact card" (vCard → iPhone's own create/add-to-existing sheet), and a chat shows a
-  dismissible "Save X to your contacts?" only if both sides wrote ≥3 messages.
+- Phone book: compose service `contacts` (profile `contacts`, python:3-alpine running
+  `server/contacts.py --loop`; setup.sh enables it when ICLOUD_* or BLUEBUBBLES_PASSWORD is set; the
+  old contacts.sh cron is gone and setup.sh removes its crontab line). Source: **iCloud CardDAV**
+  (`ICLOUD_USER` + `ICLOUD_APP_PASSWORD` app-specific password in server/.env — never in chat;
+  `ICLOUD_CARDDAV_URL` overrides contacts.icloud.com for tests), else BlueBubbles `/api/v1/contact`
+  (read-only). Every 10 min it uploads `{"v":1,source,contacts:[{id: card href, n, p, e}]}` as a
+  media file as @s (double-puppet as_token from data/synapse/doublepuppet.yaml) and points account data
+  `fit.simas.inbox.contacts` {url,count,sha256,source,writable} at it; only re-uploads on change. The app
+  (`app/src/contacts.js`, `usePhoneBook` in App.jsx) caches it in IndexedDB and matches chats by phone
+  (last 9 digits; LT "8 6…" handled), iMessage email, or an exact *unique full* name (one word like
+  "Ilona" never matches) for Messenger/Instagram/Telegram. Same contact card ⇒ merge suggestion.
+- Contact cards are only changed after he confirms: "Add to contacts" / "Update contact card" (contact
+  page) and the dismissible "Save X to your contacts?" in a chat (only if both sides wrote ≥3 messages)
+  open `ConfirmCard` (PhoneBook.jsx): editable name for new, tick/untick each number/email, **Save to
+  iCloud**. The app appends {rid, kind create|update, href, name, phones, emails} to account data
+  `fit.simas.inbox.contact_requests`; the service (polls every 20 s) PUTs the vCard (update: GET +
+  If-Match, adds only missing numbers/emails, retries on 412; create: new UID.vcf in the first address
+  book, If-None-Match *) and writes {ok, message, at} to `fit.simas.inbox.contact_results`[rid], then
+  refreshes the phone book. When `writable` is false (BlueBubbles source) the sheet hands a vCard to the
+  iPhone instead ("Open in Contacts"). Logs: `docker compose logs -f contacts`.
 
 ### Inbox list
 - The "Find a person" field sits in the top bar next to the title; its ✕ (and tapping "Inbox") clears search + filter and scrolls to the top. The 🔍 icon searches message text.

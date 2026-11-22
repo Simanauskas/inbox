@@ -32,18 +32,20 @@ export default function Inbox({ ctx, selected }) {
     <div className="page inbox">
       <TopBar
         right={<>
-          <button className="icon-btn" onClick={() => go('search')} aria-label="Search messages"><Icon name="search" /></button>
+          <button className="icon-btn" onClick={() => go('search')} aria-label="Search messages" title="Search in messages"><Icon name="search" /></button>
           <button className="icon-btn" onClick={() => go('settings')} aria-label="Settings"><Icon name="gear" /></button>
         </>}
       >
-        <button className="title-btn" onClick={home} aria-label="Inbox: back to all chats"><h1>Inbox</h1></button>
+        <div className="inbox-head">
+          <button className="title-btn" onClick={home} aria-label="Inbox: back to all chats"><h1>Inbox</h1></button>
+          <div className="search-wrap">
+            <input className="search" placeholder="Find a person" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search" />
+            {filtered && <button className="search-clear" onClick={home} aria-label="Clear search and show all chats"><Icon name="close" size={16} /></button>}
+          </div>
+        </div>
       </TopBar>
       <StatusLine client={client} />
       <div className="inbox-tools">
-        <div className="search-wrap">
-          <input className="search" placeholder="Find a person" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search" />
-          {filtered && <button className="search-clear" onClick={home} aria-label="Clear search and show all chats"><Icon name="close" size={16} /></button>}
-        </div>
         <div className="chips">
           {['all', 'unread', ...nets, 'groups'].map((f) => (
             <button key={f} className={`chip ${['all', 'unread', 'groups'].includes(f) ? '' : 'netchip'} ${filter === f ? 'on' : ''}`} onClick={() => setFilter(filter === f && f !== 'all' ? 'all' : f)} aria-pressed={filter === f}>

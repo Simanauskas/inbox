@@ -101,7 +101,7 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   dismissible "Save X to your contacts?" only if both sides wrote ≥3 messages.
 
 ### Inbox list
-- Search field has an ✕ (and tapping the "Inbox" title) that clears search + filter and scrolls to the top.
+- The "Find a person" field sits in the top bar next to the title; its ✕ (and tapping "Inbox") clears search + filter and scrolls to the top. The 🔍 icon searches message text.
 - Filter row: All · Unread · short app tags (WA/TG/FB/IG/iM, borderless) · Groups — fits one line.
 - App tags sit right after the name (max 2, else first + "+N"); the preview gets the full line.
 - WhatsApp "linked IDs" (`whatsapp_lid-…` ghosts, WhatsApp hiding numbers) are not phone numbers:

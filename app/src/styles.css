@@ -334,3 +334,12 @@ li:last-child .row-main { border-bottom: 0; }
 .emoji-grid button { font-size: 26px; padding: 6px 0; border-radius: 10px; }
 .emoji-grid button:active { background: var(--surface-2); }
 .reaction-edit { width: 100%; font-size: 26px; letter-spacing: 4px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
+
+/* search sits in the top bar next to the title */
+.inbox-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.inbox-head .title-btn { flex: none; }
+.inbox .topbar h1 { font-size: 24px; padding-left: 6px; }
+.inbox-head .search-wrap { flex: 1; min-width: 0; }
+.inbox-head .search { padding: 8px 32px 8px 12px; font-size: 16px; }
+.inbox .inbox-tools { padding-top: 4px; }
+.inbox .chips { padding-top: 4px; }

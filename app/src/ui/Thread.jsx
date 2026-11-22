@@ -81,18 +81,42 @@ export default function Thread({ ctx, item }) {
   }
 
   const typing = item.rooms.flatMap((id) => (rooms[id]?.typing || []).filter((u) => u !== me).map((u) => ({ u, id })))
-  const sub = multi ? item.networks.map((n) => <NetBadge key={n} net={n} />) : <NetBadge net={model.info[item.rooms[0]]?.network} label />
+  const why = replyTo ? 'replying to that message'
+    : choice.reason === 'recent' ? `${item.name.split(' ')[0]} wrote here ${ago(choice.ts)}`
+    : choice.reason === 'default' ? 'default app'
+    : choice.reason === 'picked' ? 'you picked this'
+    : choice.reason === 'last' ? 'last used' : ''
+  const pick = (roomId) => { overrides.set(item.key, { roomId, ts: Date.now() }); setReplyTo(null); tick((x) => x + 1) }
+  // two chats on the same app (e.g. two WhatsApp numbers) get a number each
+  const netCount = {}
+  for (const id of item.rooms) netCount[model.info[id]?.network] = (netCount[model.info[id]?.network] || 0) + 1
 
   return (
     <div className="page thread">
       <TopBar onBack={back}>
-        <button className="thread-head" onClick={() => go('p', item.key)}>
-          <Avatar client={client} mxc={item.avatarUrl} name={item.name} size={36} />
-          <div>
-            <h1>{item.name}</h1>
-            <div className="thread-sub">{typing.length ? <i>typing…</i> : sub}</div>
+        <div className="thread-head">
+          <button className="thread-avatar" onClick={() => go('p', item.key)} aria-label={`About ${item.name}`}>
+            <Avatar client={client} mxc={item.avatarUrl} name={item.name} size={36} />
+          </button>
+          <div className="thread-title">
+            <button className="thread-name" onClick={() => go('p', item.key)}><h1>{item.name}</h1></button>
+            {/* the apps this person is on: the highlighted one is where your message goes; tap another to switch */}
+            <div className="thread-sub" role={multi ? 'radiogroup' : undefined} aria-label={multi ? 'Send on' : undefined}>
+              {item.rooms.map((id, i) => {
+                const n = model.info[id]?.network
+                const name = networkInfo(n).name + (netCount[n] > 1 ? ` ${item.rooms.filter((r) => model.info[r]?.network === n).indexOf(id) + 1}` : '')
+                const on = id === target
+                return multi ? (
+                  <button key={id} role="radio" aria-checked={on} className={`ch-pick ${on ? 'on' : ''}`} style={{ '--net': networkInfo(n).color }}
+                    onClick={() => pick(id)} aria-label={`${name}${on ? `, sending here (${why})` : ''}`} title={`${name} · ${identityOf(client, model.info, id)}${on ? ` · sending here (${why})` : ''}`}>
+                    <NetBadge net={n} />{netCount[n] > 1 && <sub>{name.split(' ').pop()}</sub>}
+                  </button>
+                ) : <NetBadge key={id} net={n} label />
+              })}
+              {typing.length > 0 && <i className="typing-label">typing…</i>}
+            </div>
           </div>
-        </button>
+        </div>
       </TopBar>
       <div className="timeline" ref={scroller} onScroll={onScroll} onClick={() => setActive(null)}>
         {hasMore ? <div className="older">{loading ? <div className="spinner small" /> : <button onClick={loadOlder}>Load older messages</button>}</div>
@@ -123,8 +147,7 @@ export default function Thread({ ctx, item }) {
         {typing.length > 0 && <div className="typing"><span /><span /><span /></div>}
       </div>
       <Composer
-        ctx={ctx} item={item} target={target} choice={choice} replyTo={replyTo} multi={multi}
-        onPick={(roomId) => { overrides.set(item.key, { roomId, ts: Date.now() }); setReplyTo(null); tick((x) => x + 1) }}
+        ctx={ctx} target={target} replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
         onSent={() => { setReplyTo(null); atBottom.current = true }}
       />
@@ -291,15 +314,63 @@ function linkify(text) {
   return parts.map((p, i) => (i % 2 ? <a key={i} href={p.startsWith('http') ? p : 'https://' + p} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{p}</a> : p))
 }
 
-function Composer({ ctx, item, target, choice, replyTo, multi, onPick, onClearReply, onSent }) {
+// Voice notes: the browser records with whatever it supports (iPhone: AAC/mp4,
+// Chrome: Opus/webm); the bridges convert it to each app's voice format.
+const VOICE_TYPES = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4', 'audio/webm']
+const MAX_VOICE_MS = 5 * 60_000
+const fmtDur = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`
+
+function useRecorder(onDone) {
+  const [rec, setRec] = useState(null) // { start } while recording
+  const [, tick] = useState(0)
+  const r = useRef({})
+  useEffect(() => {
+    if (!rec) return
+    const t = setInterval(() => {
+      tick((x) => x + 1)
+      if (Date.now() - rec.start > MAX_VOICE_MS) stop(true)
+    }, 250)
+    return () => clearInterval(t)
+  }, [rec])
+  async function start() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const mimeType = VOICE_TYPES.find((t) => window.MediaRecorder?.isTypeSupported?.(t))
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+    const chunks = []
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
+    r.current = { stream, recorder, chunks, start: Date.now() }
+    recorder.start(250)
+    setRec({ start: r.current.start })
+  }
+  function stop(send) {
+    const { stream, recorder, chunks, start: began } = r.current
+    if (!recorder) return
+    r.current = {}
+    setRec(null)
+    recorder.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop())
+      const ms = Date.now() - began
+      if (send && ms > 600 && chunks.length) onDone(new Blob(chunks, { type: recorder.mimeType || chunks[0].type }), ms)
+    }
+    recorder.stop()
+  }
+  useEffect(() => () => { if (r.current.recorder) stop(false) }, [])
+  return { rec, start, stop, elapsed: rec ? Date.now() - rec.start : 0 }
+}
+
+function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   const { client, model } = ctx
   const [text, setText] = useState('')
-  const [menu, setMenu] = useState(false)
   const [err, setErr] = useState(null)
   const fileInput = useRef(null)
   const typingAt = useRef(0)
   const area = useRef(null)
   const net = model.info[target]?.network
+  const voice = useRecorder(async (blob, ms) => {
+    onSent()
+    try { await client.sendVoice(target, blob, ms) } catch (e) { setErr(`Couldn't send the voice message: ${e.message}`) }
+  })
+  const canRecord = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
 
   useEffect(() => {
     const el = area.current
@@ -335,12 +406,14 @@ function Composer({ ctx, item, target, choice, replyTo, multi, onPick, onClearRe
     }
   }
 
-  const why = replyTo ? 'replying to this message'
-    : choice.reason === 'recent' ? `${item.name.split(' ')[0]} wrote here ${ago(choice.ts)}`
-    : choice.reason === 'default' ? 'default'
-    : choice.reason === 'picked' ? 'you picked this'
-    : choice.reason === 'last' ? 'last used' : ''
+  async function startVoice() {
+    setErr(null)
+    try { await voice.start() } catch (e) {
+      setErr(e.name === 'NotAllowedError' ? 'Inbox isn’t allowed to use the microphone. Allow it in your phone’s settings for this app.' : `Can’t record: ${e.message}`)
+    }
+  }
 
+  const color = { '--net': networkInfo(net).color }
   return (
     <div className="composer">
       {replyTo && (
@@ -350,41 +423,29 @@ function Composer({ ctx, item, target, choice, replyTo, multi, onPick, onClearRe
           <button className="icon-btn" onClick={onClearReply} aria-label="Cancel reply"><Icon name="close" size={16} /></button>
         </div>
       )}
-      {multi && menu && (
-        <div className="channel-bar">
-            <div className="menu" role="menu">
-              <div className="menu-head">Send on… <span className="muted">(now: {networkInfo(net).name}, {why})</span></div>
-              {item.rooms.map((id) => {
-                const n = model.info[id]?.network
-                return (
-                  <button key={id} role="menuitemradio" aria-checked={id === target} className={id === target ? 'on' : ''} onClick={() => { onPick(id); setMenu(false) }}>
-                    <NetBadge net={n} label />
-                    <span className="menu-id">{identityOf(client, model.info, id)}</span>
-                    {item.defaultRoom === id && <span className="tag">default</span>}
-                    {id === target && <Icon name="check" size={16} />}
-                  </button>
-                )
-              })}
-            </div>
+      {err && <div className="error small">{err}</div>}
+      {voice.rec ? (
+        <div className="compose-row recording">
+          <button className="icon-btn danger" onClick={() => voice.stop(false)} aria-label="Cancel voice message"><Icon name="trash" /></button>
+          <span className="rec-dot" />
+          <span className="rec-time">{fmtDur(voice.elapsed)}</span>
+          <span className="rec-hint">Recording for {networkInfo(net).name}…</span>
+          <button className="send" onClick={() => voice.stop(true)} aria-label="Send voice message" style={color}><Icon name="send" /></button>
+        </div>
+      ) : (
+        <div className="compose-row">
+          <button className="icon-btn" onClick={() => fileInput.current?.click()} aria-label="Attach"><Icon name="attach" /></button>
+          <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
+          <textarea
+            ref={area} rows={1} value={text} onChange={onChange}
+            placeholder={`Message on ${networkInfo(net).name}`}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send() } }}
+          />
+          {text.trim() || !canRecord
+            ? <button className="send" onClick={send} disabled={!text.trim()} aria-label="Send" style={color}><Icon name="send" /></button>
+            : <button className="send mic" onClick={startVoice} aria-label="Record voice message" style={color}><Icon name="mic" /></button>}
         </div>
       )}
-      {err && <div className="error small">{err}</div>}
-      <div className="compose-row">
-        {multi && (
-          <button className="channel" onClick={() => setMenu(!menu)} aria-haspopup="menu" aria-expanded={menu}
-            aria-label={`Sending via ${networkInfo(net).name}, ${why}. Change app`} title={`Sending via ${networkInfo(net).name} (${why})`}>
-            <NetBadge net={net} /><Icon name="chevron" size={14} />
-          </button>
-        )}
-        <button className="icon-btn" onClick={() => fileInput.current?.click()} aria-label="Attach"><Icon name="attach" /></button>
-        <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
-        <textarea
-          ref={area} rows={1} value={text} onChange={onChange}
-          placeholder={`Message on ${networkInfo(net).name}`}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send() } }}
-        />
-        <button className="send" onClick={send} disabled={!text.trim()} aria-label="Send" style={{ '--net': networkInfo(net).color }}><Icon name="send" /></button>
-      </div>
     </div>
   )
 }

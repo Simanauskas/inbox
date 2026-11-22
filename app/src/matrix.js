@@ -377,6 +377,19 @@ export class Client {
     return this.send(roomId, { msgtype, body: file.name || 'file', url, info })
   }
 
+  async sendVoice(roomId, blob, durationMs) {
+    const type = (blob.type || 'audio/webm').split(';')[0]
+    const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm'
+    const file = new File([blob], `Voice message.${ext}`, { type })
+    const url = await this.upload(file)
+    return this.send(roomId, {
+      msgtype: 'm.audio', body: 'Voice message', filename: file.name, url,
+      info: { mimetype: type, size: file.size, duration: Math.round(durationMs) },
+      'org.matrix.msc1767.audio': { duration: Math.round(durationMs) },
+      'org.matrix.msc3245.voice': {},
+    })
+  }
+
   react(roomId, eventId, key) {
     return this.send(roomId, { 'm.relates_to': { rel_type: 'm.annotation', event_id: eventId, key } }, 'm.reaction')
   }

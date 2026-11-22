@@ -12,7 +12,7 @@ const APP = process.env.APP_URL || 'http://localhost:5180'
 const mock = (...a) => execFileSync('python3', [path.join(here, 'mockbridge.py'), ...a], { encoding: 'utf8' })
 const assert = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('ok -', m) }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] })
 const ctx = await browser.newContext({ ...devices['iPhone 13'] })
 const page = await ctx.newPage()
 page.on('pageerror', (e) => console.log('PAGE ERROR', e.message))
@@ -41,9 +41,9 @@ assert(await page.getByRole('button', { name: 'Show 1 chat with no messages yet'
 await page.screenshot({ path: `${out}/3-inbox-merged.png` })
 
 await page.locator('.row', { hasText: 'Rokas' }).click()
-await page.locator('.channel').waitFor()
+await page.locator('.ch-pick').first().waitFor()
 await page.waitForTimeout(800)
-const via = async () => page.locator('.channel').getAttribute('aria-label')
+const via = async () => page.locator('.ch-pick[aria-checked="true"]').getAttribute('aria-label')
 assert((await via()).includes('Telegram'), 'reply goes to Telegram (Rokas wrote there 3h ago)')
 assert((await page.locator('.composer').boundingBox()).height < 70, 'bottom bar is a single row')
 assert((await page.locator('.msg-net').count()) >= 3, 'merged thread shows app switches')
@@ -84,12 +84,21 @@ await page.waitForTimeout(300)
 assert((await via()).includes('WhatsApp'), 'after he writes on WhatsApp, reply switches to WhatsApp')
 await page.screenshot({ path: `${out}/5-thread-switch.png` })
 
-await page.locator('.channel').click()
-await page.screenshot({ path: `${out}/6-channel-menu.png` })
-await page.getByRole('menuitemradio', { name: /Telegram/ }).click()
-assert((await via()).includes('Telegram'), 'manual pick to Telegram sticks')
+await page.getByRole('radio', { name: /^Telegram/ }).click()
+assert((await via()).includes('Telegram'), 'manual pick to Telegram (tap its badge at the top) sticks')
+await page.screenshot({ path: `${out}/6-header-pick.png` })
 
-await page.locator('.thread-head').click()
+// voice message: mic when the field is empty → record → send
+await page.getByLabel('Record voice message').click()
+await page.getByText(/Recording for Telegram/).waitFor()
+await page.waitForTimeout(1500)
+await page.screenshot({ path: `${out}/6b-recording.png` })
+await page.getByLabel('Send voice message').click()
+let voiceSent = false
+for (let i = 0; i < 20 && !voiceSent; i++) { await page.waitForTimeout(500); voiceSent = mock('messages', 'telegram', 'rokas').includes('Voice message') }
+assert(voiceSent, 'voice message recorded and sent to Telegram')
+
+await page.locator('.thread-name').click()
 await page.getByText('Make default').first().waitFor()
 await page.screenshot({ path: `${out}/7-person.png` })
 

@@ -63,7 +63,11 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
 - **Ticks** on my messages (`deliveryStatus` in people.js): ✓ on the server, ✓✓ delivered (the bridge
   bot's read receipt — needs `matrix.delivery_receipts: true` / iMessage `bridge.delivery_receipts: true`,
   set by setup.sh), "Seen" under my newest message the other person's read receipt covers.
-- The app picker is a small badge (e.g. "WA ▾") at the left of the input row; the menu says why.
+- **Which app to send on** is picked in the thread header: the app badges under the name are radio
+  buttons; the current target is full colour + underlined, others dimmed; tap to switch (title/aria
+  says why it was chosen). The input row is just attach · text · send/mic.
+- **Voice messages**: mic button when the field is empty → MediaRecorder (ogg/webm Opus or iPhone mp4)
+  → `client.sendVoice` (m.audio + `org.matrix.msc3245.voice`, duration); bridges convert per app. Max 5 min.
 - Notification tap: the service worker stores `pendingOpen` in IndexedDB and the app opens that chat on
   start/visibility (iOS may launch the PWA without the #hash).
 - Online/last-seen status: not available (bridges don't pass presence; Synapse presence is off).

@@ -258,3 +258,23 @@ li:last-child .row-main { border-bottom: 0; }
 .msg.out .ticks.seen { color: #fff; opacity: 1; font-weight: 800; }
 .msg.in .ticks.seen { color: var(--accent); }
 .seen { font-size: 11px; color: var(--muted); margin: 2px 6px 0; }
+
+/* thread header: name + the apps, the highlighted one is where messages go */
+.thread-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.thread-avatar { flex: none; border-radius: 50%; }
+.thread-title { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.thread-name { text-align: left; max-width: 100%; }
+.thread-sub { display: flex; gap: 6px; align-items: center; margin-top: 3px; color: var(--muted); font-size: 13px; }
+.ch-pick { position: relative; padding: 2px 1px 5px; display: inline-flex; align-items: flex-start; opacity: 0.4; filter: grayscale(0.5); transition: opacity 0.15s; }
+.ch-pick.on { opacity: 1; filter: none; }
+.ch-pick.on::after { content: ''; position: absolute; left: 1px; right: 1px; bottom: 0; height: 2.5px; border-radius: 2px; background: var(--net); }
+.ch-pick .net { height: 19px; min-width: 26px; font-size: 11px; }
+.ch-pick sub { font-size: 9px; margin-left: 1px; color: var(--text); }
+.typing-label { margin-left: 2px; }
+/* voice messages */
+.send.mic { background: var(--surface-2); color: var(--accent); }
+.compose-row.recording { align-items: center; min-height: 40px; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #e5484d; animation: blink 1s infinite; flex: none; margin-left: 4px; }
+.rec-time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 38px; }
+.rec-hint { flex: 1; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn.danger { color: var(--danger); }

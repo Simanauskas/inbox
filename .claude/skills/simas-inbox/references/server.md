@@ -129,3 +129,12 @@ every few weeks; updating fixes most breakages.
 - The real `dock.mau.dev` images were never pulled in a cloud session (host
   blocked there); setup was verified with stand-in bridge images built from the
   bridges' own example configs.
+
+**iMessage history (23 Nov 2026).** The Mac had 721 chats / ~36k messages but only 27
+chats reached sky: `initial_sync_max_age` was 90 days. Now 36500 days and
+`initial_limit` 10000 (setup.sh). BlueBubbles' API is behind Cloudflare: Python's
+default User-Agent gets 403, send `User-Agent: curl/…`. The import was slowed by
+Synapse rate-limiting @s (the iMessage bridge sends my own messages as a real login,
+not via as_token); lifted with the admin API
+`POST /_synapse/admin/v1/users/@s:matrix.simas.fit/override_ratelimit {"messages_per_second":0,"burst_count":0}`
+(stored in Synapse's DB, survives restarts).

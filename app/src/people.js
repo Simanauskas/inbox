@@ -125,7 +125,8 @@ export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null)
   const owner = {} // roomId -> personId
   const people = []
   for (const [pid, p] of Object.entries(config.people)) {
-    const prs = (p.rooms || []).filter((id) => info[id] && !owner[id])
+    // group chats never belong to a person, even if an older app version saved one there
+    const prs = (p.rooms || []).filter((id) => info[id] && !owner[id] && info[id].kind !== 'group' && info[id].kind !== 'space')
     for (const id of prs) owner[id] = pid
     if (prs.length) people.push({ pid, p, rooms: prs })
   }

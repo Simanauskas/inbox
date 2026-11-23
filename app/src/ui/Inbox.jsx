@@ -11,13 +11,14 @@ export default function Inbox({ ctx, selected }) {
   const [filter, setFilter] = useState('all')
   const [showEmpty, setShowEmpty] = useState(false)
 
-  const nets = useMemo(() => [...new Set(model.items.flatMap((i) => i.networks))], [model])
+  // SMS chats are under the iM filter, so the filter row stays on one line
+  const nets = useMemo(() => [...new Set(model.items.flatMap((i) => i.networks.map((n) => (n === 'sms' ? 'imessage' : n))))], [model])
   const items = useMemo(() => {
     const nq = normName(q)
     return model.items.filter((i) => {
       if (filter === 'unread' && !i.unread) return false
       if (filter === 'groups' && i.kind !== 'group') return false
-      if (!['all', 'unread', 'groups'].includes(filter) && !i.networks.includes(filter)) return false
+      if (!['all', 'unread', 'groups'].includes(filter) && !i.networks.includes(filter) && !(filter === 'imessage' && i.networks.includes('sms'))) return false
       return !nq || normName(i.name).includes(nq)
     })
   }, [model, q, filter])

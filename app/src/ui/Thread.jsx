@@ -364,7 +364,7 @@ function useRecorder(onDone) {
   }, [rec])
   async function start(net) {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const mimeType = (net === 'imessage' ? IMESSAGE_VOICE_TYPES : VOICE_TYPES).find((t) => window.MediaRecorder?.isTypeSupported?.(t))
+    const mimeType = (net === 'imessage' || net === 'sms' ? IMESSAGE_VOICE_TYPES : VOICE_TYPES).find((t) => window.MediaRecorder?.isTypeSupported?.(t))
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
     const chunks = []
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }

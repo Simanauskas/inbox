@@ -6,11 +6,12 @@ export const NETWORKS = {
   facebook: { name: 'Messenger', short: 'FB', color: '#7b4dff' },
   instagram: { name: 'Instagram', short: 'IG', color: '#e1306c' },
   imessage: { name: 'iMessage', short: 'iM', color: '#1f8fff' },
+  sms: { name: 'SMS', short: 'SMS', color: '#34c759' }, // SMS via the iPhone, through the iMessage bridge
   signal: { name: 'Signal', short: 'SG', color: '#3a76f0' },
   matrix: { name: 'Matrix', short: 'MX', color: '#6b7280' },
 }
 
-const ALIASES = { facebookgo: 'facebook', instagramgo: 'instagram', messenger: 'facebook', meta: 'facebook', 'facebook-tor': 'facebook', fb: 'facebook', ig: 'instagram', bluebubbles: 'imessage', sms: 'imessage' }
+const ALIASES = { facebookgo: 'facebook', instagramgo: 'instagram', messenger: 'facebook', meta: 'facebook', 'facebook-tor': 'facebook', fb: 'facebook', ig: 'instagram', bluebubbles: 'imessage', 'imessage-sms': 'sms' }
 
 export function networkOf(room) {
   const id = room?.bridge?.protocol?.id?.toLowerCase()

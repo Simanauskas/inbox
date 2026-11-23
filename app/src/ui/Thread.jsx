@@ -395,7 +395,6 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   const [pending, setPending] = useState([]) // photos/files picked, waiting for a caption + send
   const fileInput = useRef(null)
   const cameraInput = useRef(null)
-  const galleryInput = useRef(null)
   const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
   const typingAt = useRef(0)
   const area = useRef(null)
@@ -524,14 +523,15 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
         </div>
       ) : (
         <div className={`compose-row${dragging ? ' dragging' : ''}`} {...dropProps}>
-          {/* like Messenger: any file, camera, photos & videos. A web app can't show your photo
-              library inline; these open the iPhone's own camera and photo picker. */}
-          <button className="icon-btn" onClick={() => fileInput.current?.click()} aria-label="Attach a file"><Icon name="plus" /></button>
+          {/* One picker for photos, videos and files (on the iPhone it opens Apple's menu:
+              Photo Library / Take Photo or Video / Choose Files; a web app can't skip it),
+              plus a camera button on phones that goes straight to the camera. */}
+          <button className="icon-btn" onClick={() => fileInput.current?.click()} aria-label={touch ? 'Photos, videos and files' : 'Attach files'}>
+            <Icon name={touch ? 'gallery' : 'plus'} />
+          </button>
           {touch && !text && <button className="icon-btn" onClick={() => cameraInput.current?.click()} aria-label="Take a photo or video"><Icon name="camera" /></button>}
-          {!text && <button className="icon-btn" onClick={() => galleryInput.current?.click()} aria-label="Photos and videos"><Icon name="gallery" /></button>}
           <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
           <input ref={cameraInput} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFiles} />
-          <input ref={galleryInput} type="file" accept="image/*,video/*" multiple hidden onChange={onFiles} />
           <textarea
             ref={area} rows={1} value={text} onChange={onChange} onPaste={onPaste}
             placeholder={pending.length ? 'Add a caption…' : `Message on ${networkInfo(net).name}`}

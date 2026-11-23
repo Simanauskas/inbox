@@ -54,6 +54,11 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   Settings) / `space` (hidden). From `m.bridge` state: `com.beeper.room_type.v2`
   (`dm`, `group_dm`→group, `space`), else `com.beeper.room_type`, else iMessage's
   `channel['fi.mau.imessage.is_group']`, else member heuristics.
+- **Auto-combine** (`autoMerges`, run from App.jsx after sync): rooms with the same phone number
+  (last 9 digits) or the same contact card matched by phone/email are combined without asking
+  (iMessage on email + iMessage + SMS on the number are separate chats on the Mac). Name-only
+  matches stay suggestions. Unlinking a room adds it to config `unlinked` so it isn't re-combined;
+  dismissed suggestion keys are respected too.
 - **Merge suggestions**: same normalised name (diacritics folded: Eglė = Egle,
   `mantas_j` = `Mantas J.`) or same phone number in the ghost user id. He
   confirms each with "Combine" / "Not the same person".

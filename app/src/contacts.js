@@ -56,13 +56,17 @@ function bySubset(idx, name) {
 // The contact card for a chat, if there is one: by phone number (WhatsApp,
 // iMessage, SMS), email (iMessage), or for apps without numbers (Messenger,
 // Instagram, Telegram) by a full name that only one card has, in any word order.
-export function contactFor(idx, { phone, email, names = [] }) {
+export function contactMatch(idx, { phone, email, names = [] }) {
   if (!idx?.size) return null
-  if (phone) { const c = idx.byTail.get(tail(phone)); if (c) return c }
-  if (email) { const c = idx.byEmail.get(email.toLowerCase()); if (c) return c }
-  for (const n of names) { const c = n && idx.byName.get(nameKey(n)); if (c) return c }
-  for (const n of names) { const c = n && bySubset(idx, n); if (c) return c }
+  if (phone) { const c = idx.byTail.get(tail(phone)); if (c) return { contact: c, by: 'phone' } }
+  if (email) { const c = idx.byEmail.get(email.toLowerCase()); if (c) return { contact: c, by: 'email' } }
+  for (const n of names) { const c = n && idx.byName.get(nameKey(n)); if (c) return { contact: c, by: 'name' } }
+  for (const n of names) { const c = n && bySubset(idx, n); if (c) return { contact: c, by: 'name' } }
   return null
+}
+
+export function contactFor(idx, q) {
+  return contactMatch(idx, q)?.contact || null
 }
 
 // What the apps know that the contact card doesn't (for "Update contact card").

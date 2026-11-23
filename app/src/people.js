@@ -1,12 +1,12 @@
 // Turns bridged rooms into people: one entry per person, however many apps
 // they message you on. Pure functions so they can be unit tested.
 import { networkOf, isBotUser, phoneFromUser, emailFromUser } from './networks.js'
-import { contactFor } from './contacts.js'
+import { contactMatch } from './contacts.js'
 
 export const DEFAULT_CONFIG = { version: 1, people: {}, dismissed: [], replyWindowHours: 12 }
 
 export function normConfig(c) {
-  return { ...DEFAULT_CONFIG, ...(c || {}), people: { ...((c && c.people) || {}) }, dismissed: [...((c && c.dismissed) || [])] }
+  return { ...DEFAULT_CONFIG, ...(c || {}), people: { ...((c && c.people) || {}) }, dismissed: [...((c && c.dismissed) || [])], unlinked: [...((c && c.unlinked) || [])] }
 }
 
 export function isDisplayable(ev) {
@@ -120,9 +120,10 @@ export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null)
     const title = roomTitle(room, me)
     const phone = remote ? phoneFromUser(remote) : null
     const email = remote ? emailFromUser(remote) : null
+    const cm = kind === 'dm' ? contactMatch(contactIdx, { phone, email, names: [title, remote && cleanName(room.members[remote]?.displayname)] }) : null
     info[room.id] = {
       kind, network: networkOf(room), title, remote, phone, email, lastTs: lastActivity(room),
-      contact: kind === 'dm' ? contactFor(contactIdx, { phone, email, names: [title, remote && cleanName(room.members[remote]?.displayname)] }) : null,
+      contact: cm?.contact || null, contactBy: cm?.by || null,
     }
   }
 
@@ -226,6 +227,50 @@ export function suggestions(model) {
   return out
 }
 
+// Chats that are certainly the same person: the same phone number, or the same contact
+// card found by phone number or email (e.g. iMessage on his email + iMessage and SMS on
+// his number). Combined without asking; chats you unlinked by hand are left alone, and so
+// is anything you said isn't the same person. Name-only matches stay suggestions.
+export function autoMerges(model) {
+  const { items, info, config } = model
+  const skip = new Set(config.unlinked || [])
+  const people = items.filter((i) => i.kind === 'person' && !i.rooms.some((id) => skip.has(id)))
+  const parent = new Map(people.map((p) => [p.key, p.key]))
+  const find = (k) => (parent.get(k) === k ? k : (parent.set(k, find(parent.get(k))), parent.get(k)))
+  const union = (a, b) => parent.set(find(a), find(b))
+  const seen = new Map()
+  const link = (k, key) => { if (seen.has(k)) union(key, seen.get(k)); else seen.set(k, key) }
+  for (const p of people) {
+    for (const id of p.rooms) {
+      const i = info[id]
+      if (i.contact && (i.contactBy === 'phone' || i.contactBy === 'email')) link('c:' + (i.contact.id || i.contact.n), p.key)
+      if (i.phone) link('p:' + i.phone.slice(-9), p.key)
+    }
+  }
+  const groups = new Map()
+  for (const p of people) { const r = find(p.key); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(p) }
+  const dismissed = new Set(config.dismissed)
+  const out = []
+  for (const members of groups.values()) {
+    if (members.length < 2) continue
+    const rooms = members.flatMap((m) => m.rooms).sort()
+    if (dismissed.has(rooms.join('|'))) continue
+    const user = members.find((m) => m.nameSource === 'user')?.name
+    const name = user || members.find((m) => m.contact)?.contact?.n || members.find((m) => m.personId)?.name || members[0].name
+    // default: an existing person's choice, else the chat with the newest message
+    const def = members.find((m) => m.personId && m.defaultRoom)?.defaultRoom
+      || members.flatMap((m) => m.rooms).sort((a, b) => (info[b].lastTs || 0) - (info[a].lastTs || 0))[0]
+    out.push({ members, name, defaultRoom: def })
+  }
+  return out
+}
+
+export function applyAutoMerges(rawConfig, merges) {
+  let c = normConfig(rawConfig)
+  for (const m of merges) c = mergePeople(c, m.members, m.name, m.defaultRoom).config
+  return c
+}
+
 // --- config edits (return new config objects) ---
 const newId = () => Math.random().toString(36).slice(2, 10)
 
@@ -241,6 +286,7 @@ export function mergePeople(rawConfig, members, name, defaultRoom) {
 
 export function linkRoom(rawConfig, item, roomId) {
   const c = normConfig(rawConfig)
+  c.unlinked = c.unlinked.filter((r) => r !== roomId)
   for (const p of Object.values(c.people)) p.rooms = (p.rooms || []).filter((r) => r !== roomId)
   const { config, personId } = mergePeople(c, [item, { rooms: [roomId] }], item.name, item.defaultRoom)
   return { config: prune(config), personId }
@@ -252,6 +298,7 @@ export function unlinkRoom(rawConfig, personId, roomId) {
   if (!p) return c
   p.rooms = p.rooms.filter((r) => r !== roomId)
   if (p.defaultRoom === roomId) p.defaultRoom = null
+  if (!c.unlinked.includes(roomId)) c.unlinked.push(roomId) // don't combine it again automatically
   return prune(c)
 }
 

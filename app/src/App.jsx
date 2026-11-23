@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState, useSyncExternalStore, useCallback } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react'
 import { Client, PEOPLE_TYPE } from './matrix.js'
-import { buildModel, suggestions, previewText } from './people.js'
+import { buildModel, suggestions, previewText, autoMerges, applyAutoMerges } from './people.js'
 import { networkInfo } from './networks.js'
 import Login from './ui/Login.jsx'
 import Inbox from './ui/Inbox.jsx'
@@ -98,6 +98,16 @@ function Main({ session, onLogout }) {
     [version, contactIdx],
   )
   const sugg = useMemo(() => suggestions(model), [model])
+  // combine chats that are certainly the same person (same number / same contact card)
+  const autoBusy = useRef(false)
+  useEffect(() => {
+    if (autoBusy.current || !client.synced) return
+    const merges = autoMerges(model)
+    if (!merges.length) return
+    autoBusy.current = true
+    client.setAccountData(PEOPLE_TYPE, applyAutoMerges(client.accountData[PEOPLE_TYPE], merges))
+      .catch(() => {}).finally(() => { autoBusy.current = false })
+  }, [model, client])
 
   const findItem = useCallback((key) => {
     if (!key) return null

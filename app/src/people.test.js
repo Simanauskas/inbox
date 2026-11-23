@@ -226,3 +226,29 @@ test('reaction emojis: split typed text into whole emojis', async () => {
   assert.deepEqual(quickReactions({}), DEFAULT_REACTIONS)
   assert.deepEqual(quickReactions({ quickReactions: ['🔥'] }), ['🔥'])
 })
+
+test('auto-combine: same number or same contact card by phone/email, never by name alone', async () => {
+  const { indexContacts } = await import('./contacts.js')
+  const { autoMerges, applyAutoMerges, unlinkRoom } = await import('./people.js')
+  const idx = indexContacts({ contacts: [{ id: 'card1', n: 'Jonas Kazlauskas', p: ['+37061111111'], e: ['jonas@example.com'] }, { id: 'card2', n: 'Rimas Vaitkus', p: [] }] })
+  const r = {
+    ime: room('ime', 'imessage', '@imessage_jonas=40example.com:x', 'Jonas Kazlauskas', [msg('@imessage_jonas=40example.com:x', now)], { bridge: { bridgebot: '@imessagebot:x', protocol: { id: 'imessagego' }, channel: { 'fi.mau.imessage.is_group': false } } }),
+    imp: room('imp', 'imessage', '@imessage_+37061111111:x', 'Jonas Kazlauskas', [msg('@imessage_+37061111111:x', now - H)], { bridge: { bridgebot: '@imessagebot:x', protocol: { id: 'imessagego' }, channel: { 'fi.mau.imessage.is_group': false } } }),
+    sms: room('sms', 'imessage', '@imessage_+37061111111:x', 'Jonas Kazlauskas', [msg('@imessage_+37061111111:x', now - 2 * H)], { bridge: { bridgebot: '@imessagebot:x', protocol: { id: 'imessage-sms' }, channel: { 'fi.mau.imessage.is_group': false } } }),
+    fb: room('fb', 'facebook', '@facebook_7:x', 'Rimas Vaitkus', [msg('@facebook_7:x', now)]),
+    ig: room('ig', 'instagram', '@instagram_9:x', 'Rimas Vaitkus', [msg('@instagram_9:x', now)]),
+  }
+  const m = buildModel(r, {}, ME, null, idx)
+  const merges = autoMerges(m)
+  assert.equal(merges.length, 1, 'only the number/email group, not the name-only one')
+  assert.deepEqual(merges[0].members.flatMap((x) => x.rooms).sort(), ['ime', 'imp', 'sms'])
+  const cfg = applyAutoMerges(null, merges)
+  const m2 = buildModel(r, {}, ME, cfg, idx)
+  const jonas = m2.items.find((i) => i.rooms.includes('ime'))
+  assert.deepEqual([...jonas.rooms].sort(), ['ime', 'imp', 'sms'])
+  assert.equal(jonas.name, 'Jonas Kazlauskas')
+  assert.equal(autoMerges(m2).length, 0, 'nothing left to do')
+  // unlinking by hand sticks
+  const cfg2 = unlinkRoom(cfg, jonas.personId, 'sms')
+  assert.equal(autoMerges(buildModel(r, {}, ME, cfg2, idx)).length, 0)
+})

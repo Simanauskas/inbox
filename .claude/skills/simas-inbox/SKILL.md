@@ -114,7 +114,7 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   `d`: first/last/org/title/bday/note, `ph`/`em` as [label, value], `adr`, `url`). **Edit** (`EditCard`)
   sends `{kind:'edit', href, changes}` with only the changed fields; `contacts.py edit_card` rewrites
   just those properties (TEL/EMAIL with their itemN.X-ABLabel lines), keeps every other line exactly
-  as written (photo, addresses…), If-Match etag. FN keeps the card's own order (often surname first).
+  as written (photo, addresses…), If-Match etag. Names are first name + surname from N (FN ignored for display); edits write FN that way too.
   ConfirmCard also has a "Phone number" field (Messenger/IG never give numbers).
 
 ### Inbox list

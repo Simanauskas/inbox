@@ -187,8 +187,9 @@ def parse_vcard(text):
             emails.append(value.strip().lower())
         elif name in ("FN", "N", "ORG", "NICKNAME", "BDAY", "NOTE", "TITLE") and name not in fields:
             fields[name] = value.strip()
-    n = unescape(fields.get("FN", "")) or " ".join(unescape(p) for p in reversed((fields.get("N") or "").split(";")[:2]) if p) \
-        or unescape(fields.get("ORG", "").split(";")[0]) or unescape(fields.get("NICKNAME", ""))
+    # first name, then surname (from N), whatever order the card's FN was saved in
+    n = " ".join(unescape(p).strip() for p in reversed((fields.get("N") or "").split(";")[:2]) if p.strip()) \
+        or unescape(fields.get("FN", "")) or unescape(fields.get("ORG", "").split(";")[0]) or unescape(fields.get("NICKNAME", ""))
     nparts = (fields.get("N") or "").split(";") + ["", ""]
     d = {"first": unescape(nparts[1]), "last": unescape(nparts[0]),
          "org": unescape(fields.get("ORG", "").split(";")[0]), "title": unescape(fields.get("TITLE", "")),
@@ -384,9 +385,7 @@ def edit_card(href, ch):
             last = ch.get("last", od.get("last", "")).strip()
             if not (first or last):
                 raise RuntimeError("the contact needs a name")
-            # keep the card's own order: "Surname Name" if that's how it was written
-            surname_first = bool(od.get("last")) and (old.get("n", "").startswith(od.get("last", "")))
-            fn = " ".join(x for x in ([last, first] if surname_first else [first, last]) if x)
+            fn = " ".join(x for x in (first, last) if x)  # first name, then surname
             add += [f"N:{esc(last)};{esc(first)};;;", f"FN:{esc(fn)}"]
         if ch.get("org", "").strip():
             add.append(f"ORG:{esc(ch['org'].strip())};")

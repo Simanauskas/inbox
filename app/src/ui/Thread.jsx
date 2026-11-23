@@ -429,11 +429,37 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   }
 
   // Picked files wait above the text field so you can add a caption (like WhatsApp).
+  function addFiles(files) {
+    if (!files.length) return
+    setPending((p) => [...p, ...files.map((file) => ({ file, url: /^(image|video)\//.test(file.type) ? URL.createObjectURL(file) : null }))])
+    setTimeout(() => area.current?.focus(), 0)
+  }
+
   function onFiles(e) {
     const files = [...e.target.files]
     e.target.value = ''
-    setPending((p) => [...p, ...files.map((file) => ({ file, url: /^(image|video)\//.test(file.type) ? URL.createObjectURL(file) : null }))])
-    setTimeout(() => area.current?.focus(), 0)
+    addFiles(files)
+  }
+
+  // ⌘V of a screenshot or a copied file: queue it like a picked photo (text pastes as usual)
+  function onPaste(e) {
+    const cd = e.clipboardData
+    let files = [...(cd?.files || [])]
+    if (!files.length) files = [...(cd?.items || [])].filter((it) => it.kind === 'file').map((it) => it.getAsFile()).filter(Boolean)
+    if (!files.length) return
+    e.preventDefault()
+    const stamp = new Date().toISOString().slice(0, 19).replace('T', ' ').replace(/:/g, '.')
+    addFiles(files.map((f, i) => (/^image\.(png|jpe?g|gif|webp|heic)$/i.test(f.name) || !f.name
+      ? new File([f], `Screenshot ${stamp}${files.length > 1 ? ` (${i + 1})` : ''}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type })
+      : f)))
+  }
+
+  // drag files from Finder onto the message box
+  const [dragging, setDragging] = useState(false)
+  const dropProps = {
+    onDragOver: (e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); setDragging(true) } },
+    onDragLeave: () => setDragging(false),
+    onDrop: (e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); addFiles([...e.dataTransfer.files]) } },
   }
 
   function removePending(i) {
@@ -493,11 +519,11 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
           <button className="send" onClick={() => voice.stop(true)} aria-label="Send voice message" style={color}><Icon name="send" /></button>
         </div>
       ) : (
-        <div className="compose-row">
+        <div className={`compose-row${dragging ? ' dragging' : ''}`} {...dropProps}>
           <button className="icon-btn" onClick={() => fileInput.current?.click()} aria-label="Attach"><Icon name="attach" /></button>
           <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
           <textarea
-            ref={area} rows={1} value={text} onChange={onChange}
+            ref={area} rows={1} value={text} onChange={onChange} onPaste={onPaste}
             placeholder={pending.length ? 'Add a caption…' : `Message on ${networkInfo(net).name}`}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send() } }}
           />

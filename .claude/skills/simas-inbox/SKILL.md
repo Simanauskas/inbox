@@ -99,7 +99,7 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   media file as @s (double-puppet as_token from data/synapse/doublepuppet.yaml) and points account data
   `fit.simas.inbox.contacts` {url,count,sha256,source,writable} at it; only re-uploads on change. The app
   (`app/src/contacts.js`, `usePhoneBook` in App.jsx) caches it in IndexedDB and matches chats by phone
-  (last 9 digits; LT "8 6…" handled), iMessage email, or an exact *unique full* name (one word like
+  (last 9 digits; LT "8 6…" handled), iMessage email, or a *unique full* name in any word order (cards are often saved surname first, with emoji; a middle name only on the app is fine if exactly one card fits) (one word like
   "Ilona" never matches) for Messenger/Instagram/Telegram. Same contact card ⇒ merge suggestion.
 - Contact cards are only changed after he confirms: "Add to contacts" / "Update contact card" (contact
   page) and the dismissible "Save X to your contacts?" in a chat (only if both sides wrote ≥3 messages)

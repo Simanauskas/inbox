@@ -1,3 +1,42 @@
+diff --git a/historysync.go b/historysync.go
+index 7ffc238..e9a963d 100644
+--- a/historysync.go
++++ b/historysync.go
+@@ -206,6 +206,12 @@ func (portal *Portal) convertTapbacks(messages []*imessage.Message) ([]*event.Ev
+ 			portal.log.Errorfln("Failed to get target message for tabpack, %+v", msg)
+ 			continue
+ 		}
++		if msg.Tapback.Type.Emoji() == "" {
++			// sky: tapbacks of an unknown type (e.g. newer iOS emoji tapbacks) have no
++			// emoji; Synapse rejects a reaction without a key and the whole backfill stops
++			portal.log.Debugfln("Skipping tapback %s with unknown type %d", msg.GUID, msg.Tapback.Type)
++			continue
++		}
+ 
+ 		evt := &event.Event{
+ 			Sender:    intent.UserID,
+@@ -355,8 +361,9 @@ func (portal *Portal) sendBackfillToMatrixServer(batchSending, forward, forwardI
+ 			}
+ 			resp, err := meta.Intent.SendMassagedMessageEvent(portal.MXID, evt.Type, &evt.Content, evt.Timestamp)
+ 			if err != nil {
+-				portal.log.Errorfln("Failed to send event #%d in history: %v", i, err)
+-				return nil, err
++				// sky: skip this event instead of dropping the rest of the chat's history
++				portal.log.Errorfln("Failed to send event #%d in history, skipping it: %v", i, err)
++				continue
+ 			}
+ 			eventIDs[i] = resp.EventID
+ 		}
+@@ -373,6 +380,9 @@ func (portal *Portal) sendBackfillToMatrixServer(batchSending, forward, forwardI
+ 
+ func (portal *Portal) finishBackfill(txn dbutil.Transaction, eventIDs []id.EventID, metas []messageWithIndex) {
+ 	for i, info := range metas {
++		if eventIDs[i] == "" {
++			continue
++		}
+ 		if info.Tapback != nil {
+ 			if info.Tapback.Remove {
+ 				continue
 diff --git a/imessage/bluebubbles/api.go b/imessage/bluebubbles/api.go
 index 3d3d86f..86ab916 100644
 --- a/imessage/bluebubbles/api.go

@@ -155,8 +155,8 @@ imessage_config() {
     .bridge.encryption.allow = false |
     .bridge.delivery_receipts = true |
     .bridge.backfill.enable = true |
-    .bridge.backfill.initial_limit = 1000 |
-    .bridge.backfill.initial_sync_max_age = 90'
+    .bridge.backfill.initial_limit = 10000 |
+    .bridge.backfill.initial_sync_max_age = 36500'
 }
 
 for b in $BRIDGES; do

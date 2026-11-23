@@ -378,3 +378,4 @@ li:last-child .row-main { border-bottom: 0; }
 .list-ticks { letter-spacing: -3px; padding-right: 4px; font-weight: 600; color: var(--muted); }
 .list-ticks.seen { color: var(--accent); font-weight: 800; }
 .row-preview .typing-label { color: var(--accent); }
+.compose-row > .icon-btn { padding-left: 6px; padding-right: 6px; flex: none; }

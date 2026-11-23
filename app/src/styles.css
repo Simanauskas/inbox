@@ -349,3 +349,26 @@ li:last-child .row-main { border-bottom: 0; }
 .confirm-card .field input { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px; }
 .confirm-card .details { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .confirm-card p { margin: 0; }
+
+/* contact card details (from iCloud) and its edit sheet */
+.contact-details { margin-bottom: 10px; }
+.contact-details .details-head { display: flex; justify-content: space-between; align-items: center; }
+.detail-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.detail-row { display: flex; flex-direction: column; padding: 8px 0; }
+.detail-row + .detail-row { border-top: 1px solid var(--line); }
+.detail-label { font-size: 13px; color: var(--muted); }
+.detail-value { font-size: 16px; overflow-wrap: anywhere; }
+.detail-value a { color: var(--accent); text-decoration: none; }
+.pre { white-space: pre-wrap; }
+.edit-card { max-height: 92vh; overflow-y: auto; }
+.edit-card .two { display: flex; gap: 8px; }
+.edit-card .two > * { flex: 1; min-width: 0; }
+.confirm-card .field textarea { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px; font-family: inherit; resize: vertical; }
+.confirm-card .field input { min-width: 0; }
+.list-editor { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.list-editor legend { font-size: 13px; color: var(--muted); padding: 0; margin-bottom: 4px; }
+.list-row { display: flex; gap: 6px; align-items: center; }
+.list-row input { min-width: 0; padding: 10px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px; }
+.list-row .label-input { width: 92px; flex: none; }
+.list-row input:not(.label-input) { flex: 1; }
+.list-editor .text-btn { align-self: flex-start; }

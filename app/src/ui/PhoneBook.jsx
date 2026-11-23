@@ -192,3 +192,131 @@ export function ContactPrompt({ ctx, item }) {
     </div>
   )
 }
+
+// ---- The contact card itself: everything on it, editable, saved to iCloud ----
+
+const PHONE_LABELS = ['mobile', 'iPhone', 'home', 'work', 'main', 'other']
+const EMAIL_LABELS = ['home', 'work', 'other']
+
+function formatBday(v) {
+  const m = /^(\d{4}|--)-?(\d{2})-?(\d{2})$/.exec(v || '')
+  if (!m) return v
+  const d = new Date(Date.UTC(m[1] === '--' ? 2000 : +m[1], +m[2] - 1, +m[3]))
+  return d.toLocaleDateString([], { day: 'numeric', month: 'long', ...(m[1] === '--' ? {} : { year: 'numeric' }), timeZone: 'UTC' })
+}
+const isoBday = (v) => { const m = /^(\d{4})-?(\d{2})-?(\d{2})$/.exec(v || ''); return m ? `${m[1]}-${m[2]}-${m[3]}` : '' }
+
+function Row({ label, children }) {
+  return <li className="detail-row"><span className="detail-label">{label || ' '}</span><span className="detail-value">{children}</span></li>
+}
+
+export function ContactDetails({ ctx, item }) {
+  const { client } = ctx
+  const [editing, setEditing] = useState(false)
+  const c = item.contact
+  if (!c) return null
+  const d = c.d || { ph: (c.p || []).map((p) => ['', p]), em: (c.e || []).map((e) => ['', e]) }
+  const rows = [
+    ...(d.ph || []).map(([l, v], i) => <Row key={'p' + i} label={l || 'phone'}><a href={`tel:${v.replace(/[^\d+]/g, '')}`}>{v}</a></Row>),
+    ...(d.em || []).map(([l, v], i) => <Row key={'e' + i} label={l || 'email'}><a href={`mailto:${v}`}>{v}</a></Row>),
+    ...(d.org || d.title ? [<Row key="org" label="company">{[d.title, d.org].filter(Boolean).join(', ')}</Row>] : []),
+    ...(d.bday ? [<Row key="bday" label="birthday">{formatBday(d.bday)}</Row>] : []),
+    ...(d.adr || []).map(([l, v], i) => <Row key={'a' + i} label={l || 'address'}>{v}</Row>),
+    ...(d.url || []).map(([l, v], i) => <Row key={'u' + i} label={l || 'website'}><a href={/^https?:/.test(v) ? v : `https://${v}`} target="_blank" rel="noreferrer">{v}</a></Row>),
+    ...(d.note ? [<Row key="note" label="note"><span className="pre">{d.note}</span></Row>] : []),
+  ]
+  return (
+    <div className="card contact-details">
+      <div className="details-head">
+        <span className="muted small">iCloud card</span>
+        {writable(client) && c.d && <button className="text-btn" onClick={() => setEditing(true)}>Edit</button>}
+      </div>
+      {rows.length ? <ul className="detail-list">{rows}</ul> : <p className="muted small">Nothing else on the card yet.</p>}
+      {editing && <EditCard ctx={ctx} contact={c} onClose={() => setEditing(false)} />}
+    </div>
+  )
+}
+
+function ListEditor({ title, rows, setRows, labels, type, placeholder, disabled }) {
+  const id = `labels-${title}`
+  const set = (i, j, v) => setRows(rows.map((r, k) => (k === i ? (j === 0 ? [v, r[1]] : [r[0], v]) : r)))
+  return (
+    <fieldset className="list-editor" disabled={disabled}>
+      <legend>{title}</legend>
+      <datalist id={id}>{labels.map((l) => <option key={l} value={l} />)}</datalist>
+      {rows.map((r, i) => (
+        <div className="list-row" key={i}>
+          <input className="label-input" list={id} value={r[0]} placeholder="label" onChange={(e) => set(i, 0, e.target.value)} />
+          <input type={type} inputMode={type === 'tel' ? 'tel' : 'email'} value={r[1]} placeholder={placeholder} onChange={(e) => set(i, 1, e.target.value)} />
+          <button type="button" className="icon-btn" aria-label="Remove" onClick={() => setRows(rows.filter((_, k) => k !== i))}><Icon name="close" size={16} /></button>
+        </div>
+      ))}
+      <button type="button" className="text-btn" onClick={() => setRows([...rows, [labels[0], '']])}>+ Add {title === 'Phones' ? 'phone' : 'email'}</button>
+    </fieldset>
+  )
+}
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+// Edit the card; only the fields you changed are sent, and sky changes only those on iCloud.
+export function EditCard({ ctx, contact, onClose }) {
+  const { client } = ctx
+  const d = contact.d || {}
+  const start = {
+    first: d.first || '', last: d.last || '', org: d.org || '', title: d.title || '',
+    bday: isoBday(d.bday), note: d.note || '', ph: (d.ph || []).map((x) => [...x]), em: (d.em || []).map((x) => [...x]),
+  }
+  const [f, setF] = useState(start)
+  const [rid, setRid] = useState(null)
+  const [err, setErr] = useState(null)
+  const result = rid ? client.accountData[RESULTS_TYPE]?.results?.[rid] : null
+  const field = (k) => ({ value: f[k], onChange: (e) => setF({ ...f, [k]: e.target.value }), disabled: !!rid })
+
+  const clean = (rows) => rows.map(([l, v]) => [l.trim(), v.trim()]).filter(([, v]) => v)
+  const badPhone = clean(f.ph).find(([, v]) => !normalizePhone(v))
+  const badEmail = clean(f.em).find(([, v]) => !/^[^@\s]+@[^@\s]+$/.test(v))
+  const changes = {}
+  if (f.first.trim() !== start.first || f.last.trim() !== start.last) { changes.first = f.first.trim(); changes.last = f.last.trim() }
+  for (const k of ['org', 'title', 'note']) if (f[k].trim() !== start[k]) changes[k] = f[k].trim()
+  if (f.bday !== start.bday) changes.bday = f.bday
+  if (!same(clean(f.ph), start.ph)) changes.ph = clean(f.ph)
+  if (!same(clean(f.em), start.em)) changes.em = clean(f.em)
+  const n = Object.keys(changes).length
+  const canSave = n && (f.first.trim() || f.last.trim()) && !badPhone && !badEmail
+
+  async function save() {
+    setErr(null)
+    try { setRid(await requestChange(client, { kind: 'edit', href: contact.id, changes })) } catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet confirm-card edit-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Edit contact">
+        <h3>Edit contact</h3>
+        <div className="two">
+          <label className="field">First name<input {...field('first')} /></label>
+          <label className="field">Last name<input {...field('last')} /></label>
+        </div>
+        <ListEditor title="Phones" rows={f.ph} setRows={(ph) => setF({ ...f, ph })} labels={PHONE_LABELS} type="tel" placeholder="+370 612 34567" disabled={!!rid} />
+        {badPhone && <p className="error small">“{badPhone[1]}” doesn’t look like a phone number.</p>}
+        <ListEditor title="Emails" rows={f.em} setRows={(em) => setF({ ...f, em })} labels={EMAIL_LABELS} type="email" placeholder="name@example.com" disabled={!!rid} />
+        {badEmail && <p className="error small">“{badEmail[1]}” doesn’t look like an email.</p>}
+        <div className="two">
+          <label className="field">Company<input {...field('org')} /></label>
+          <label className="field">Job title<input {...field('title')} /></label>
+        </div>
+        <label className="field">Birthday<input type="date" {...field('bday')} /></label>
+        <label className="field">Note<textarea rows={3} {...field('note')} /></label>
+        <p className="muted small">Saved to the card in iCloud; the photo, addresses and anything else on it stay as they are.</p>
+        {err && <p className="error">{err}</p>}
+        {rid && !result && <p className="muted"><span className="spinner small" /> Saving to iCloud…</p>}
+        {result?.ok && <p>✓ Saved to iCloud. It shows up here and on your iPhone in a moment.</p>}
+        {result && !result.ok && <p className="error">iCloud didn’t accept it: {result.message}</p>}
+        <div className="sugg-actions">
+          <button className="text-btn" onClick={onClose}>{result ? 'Close' : 'Cancel'}</button>
+          {!rid && <button className="primary" disabled={!canSave} onClick={save}>Save to iCloud</button>}
+        </div>
+      </div>
+    </div>
+  )
+}

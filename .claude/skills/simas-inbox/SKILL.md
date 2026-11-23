@@ -110,6 +110,12 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   book, If-None-Match *) and writes {ok, message, at} to `fit.simas.inbox.contact_results`[rid], then
   refreshes the phone book. When `writable` is false (BlueBubbles source) the sheet hands a vCard to the
   iPhone instead ("Open in Contacts"). Logs: `docker compose logs -f contacts`.
+- Contact page shows the whole iCloud card (`ContactDetails`, PhoneBook.jsx; the phone book JSON has
+  `d`: first/last/org/title/bday/note, `ph`/`em` as [label, value], `adr`, `url`). **Edit** (`EditCard`)
+  sends `{kind:'edit', href, changes}` with only the changed fields; `contacts.py edit_card` rewrites
+  just those properties (TEL/EMAIL with their itemN.X-ABLabel lines), keeps every other line exactly
+  as written (photo, addresses…), If-Match etag. FN keeps the card's own order (often surname first).
+  ConfirmCard also has a "Phone number" field (Messenger/IG never give numbers).
 
 ### Inbox list
 - The "Find a person" field sits in the top bar next to the title; its ✕ (and tapping "Inbox") clears search + filter and scrolls to the top. The 🔍 icon searches message text.

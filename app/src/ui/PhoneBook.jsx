@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { PEOPLE_TYPE } from '../matrix.js'
 import { normConfig, isDisplayable, clearCustomName } from '../people.js'
-import { missingFromCard, vcard } from '../contacts.js'
+import { missingFromCard, vcard, normalizePhone } from '../contacts.js'
 import { networkInfo } from '../networks.js'
 import { Icon } from './common.jsx'
 
@@ -81,13 +81,17 @@ export function ConfirmCard({ ctx, item, suggestion, onClose }) {
   const [name, setName] = useState(suggestion.name)
   const all = [...suggestion.phones.map((p) => ({ kind: 'phone', value: p, label: '+' + p })), ...suggestion.emails.map((e) => ({ kind: 'email', value: e, label: e }))]
   const [keep, setKeep] = useState(() => Object.fromEntries(all.map((d) => [d.value, true])))
+  const [typed, setTyped] = useState('')
   const [rid, setRid] = useState(null)
   const [err, setErr] = useState(null)
   const result = rid ? client.accountData[RESULTS_TYPE]?.results?.[rid] : null
   const chosen = all.filter((d) => keep[d.value])
-  const phones = chosen.filter((d) => d.kind === 'phone').map((d) => d.value)
+  // a number you type (their usual one), so WhatsApp, iMessage and SMS chats match it too
+  const typedPhone = typed.trim() ? normalizePhone(typed) : null
+  const badPhone = !!typed.trim() && !typedPhone
+  const phones = [...new Set([...chosen.filter((d) => d.kind === 'phone').map((d) => d.value), ...(typedPhone ? [typedPhone] : [])])]
   const emails = chosen.filter((d) => d.kind === 'email').map((d) => d.value)
-  const canSave = name.trim() && (suggestion.kind === 'add' || chosen.length)
+  const canSave = name.trim() && !badPhone && (suggestion.kind === 'add' || phones.length || emails.length)
 
   async function save() {
     setErr(null)
@@ -105,7 +109,7 @@ export function ConfirmCard({ ctx, item, suggestion, onClose }) {
         <h3>{suggestion.kind === 'add' ? 'New contact' : `Update ${suggestion.name}`}</h3>
         {suggestion.kind === 'add'
           ? <label className="field">Name<input value={name} onChange={(e) => setName(e.target.value)} disabled={!!rid} /></label>
-          : <p className="muted small">Adds what the apps know to the card. Nothing else on it changes.</p>}
+          : <p className="muted small">Adds these to the card. Nothing else on it changes.</p>}
         {all.length > 0 && (
           <ul className="details">
             {all.map((d) => (
@@ -118,6 +122,10 @@ export function ConfirmCard({ ctx, item, suggestion, onClose }) {
             ))}
           </ul>
         )}
+        <label className="field">Phone number{suggestion.kind === 'add' ? ' (optional)' : ''}
+          <input type="tel" inputMode="tel" placeholder="+370 612 34567" value={typed} onChange={(e) => setTyped(e.target.value)} disabled={!!rid} />
+        </label>
+        {badPhone && <p className="error small">That doesn't look like a phone number.</p>}
         {err && <p className="error">{err}</p>}
         {rid && !result && <p className="muted"><span className="spinner small" /> Saving to iCloud…</p>}
         {result?.ok && <p>✓ Saved to iCloud ({result.message}). It shows up on your iPhone in a moment.</p>}
@@ -150,6 +158,11 @@ export function PhoneBookCard({ ctx, item }) {
       {item.nameSource !== 'user' && item.contact && <p>Named as in <b>your contacts</b>.</p>}
       {item.nameSource !== 'user' && !item.contact && <p className="muted">Not in your contacts, so the name comes from {apps(item)}.</p>}
       {s?.kind === 'add' && <button className="wide-btn" onClick={() => setOpen(s)}><Icon name="people" size={18} /> Add to contacts</button>}
+      {!s && item.contact && !(item.contact.p || []).length && (
+        <button className="wide-btn" onClick={() => setOpen({ kind: 'update', name: item.contact.n, href: item.contact.id, phones: [], emails: [] })}>
+          <Icon name="people" size={18} /> Add their phone number
+        </button>
+      )}
       {s?.kind === 'update' && (
         <>
           <p className="muted small">The apps know {[...s.phones.map((p) => '+' + p), ...s.emails].join(', ')}, which isn't on the card.</p>

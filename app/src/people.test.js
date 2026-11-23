@@ -199,6 +199,18 @@ test('phone book: names, matching and merging', async () => {
   assert.equal(m3.items.find((i) => i.rooms.includes('wa')).name, 'Rokas P. (tennis)')
   // what the apps know that the card doesn't
   assert.deepEqual(missingFromCard(idx.list[0], { phones: ['37061234567', '37069999999'], emails: ['ROKAS@example.com'] }), { phones: ['37069999999'], emails: [] })
+  // cards saved surname first (with an emoji), and a middle name the card doesn't have
+  const { contactFor } = await import('./contacts.js')
+  const idx2 = indexContacts({ contacts: [
+    { n: 'Kazlauskas Jonas🏦', p: ['+37061111111'] },
+    { n: 'Petraitis Ąžuolas', p: [] },
+    { n: 'Vaitkus Rimas 🎾', p: [] },
+    { n: 'Vaitkus Rimas', p: [] },
+  ] })
+  assert.equal(contactFor(idx2, { names: ['Jonas Kazlauskas'] })?.n, 'Kazlauskas Jonas🏦', 'word order and emoji ignored')
+  assert.equal(contactFor(idx2, { names: ['Azuolas Mantas Petraitis'] })?.n, 'Petraitis Ąžuolas', 'middle name on the app only')
+  assert.equal(contactFor(idx2, { names: ['Rimas Vaitkus'] }), null, 'two cards with that name: no guess')
+  assert.equal(contactFor(idx2, { names: ['Rimas'] }), null)
   assert.match(vcard({ name: 'Jonas Bernotas', phones: ['37065666144'] }), /FN:Jonas Bernotas\r\nN:Bernotas;Jonas;;;\r\nTEL;TYPE=CELL:\+37065666144/)
 })
 

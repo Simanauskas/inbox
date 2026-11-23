@@ -1,5 +1,4 @@
-// Your phone book (iCloud contacts, read by the server from BlueBubbles on the
-// Mac) — used to name people the way you saved them and to spot the same
+// Your phone book (iCloud contacts, read by the server from iCloud) — used to name people the way you saved them and to spot the same
 // person on different apps. Pure functions, unit-tested.
 import { normName } from './people.js'
 
@@ -18,6 +17,12 @@ export function normalizePhone(raw) {
 
 const tail = (digits) => digits.slice(-9)
 
+// Name words in a fixed order, so "Bakutis Tadas" (surname first, as many
+// cards are saved) and "Tadas Bakutis" (how Messenger shows him) are the same.
+export function nameKey(s) {
+  return normName(s).split(' ').filter(Boolean).sort().join(' ')
+}
+
 export function indexContacts(data) {
   const list = (data?.contacts || []).filter((c) => c.n)
   const byTail = new Map()
@@ -26,26 +31,37 @@ export function indexContacts(data) {
   for (const c of list) {
     for (const p of c.p || []) { const n = normalizePhone(p); if (n && n.length >= 8) byTail.set(tail(n), c) }
     for (const e of c.e || []) byEmail.set(e.toLowerCase(), c)
-    const k = normName(c.n)
+    const k = nameKey(c.n)
     nameCount.set(k, (nameCount.get(k) || 0) + 1)
   }
   // a name only identifies someone if it's a full name and nobody else has it
   const byName = new Map()
+  const fullNames = []
   for (const c of list) {
-    const k = normName(c.n)
-    if (k.includes(' ') && nameCount.get(k) === 1) byName.set(k, c)
+    const k = nameKey(c.n)
+    if (k.includes(' ') && nameCount.get(k) === 1) { byName.set(k, c); fullNames.push([new Set(k.split(' ')), c]) }
   }
-  return { list, byTail, byEmail, byName, size: list.length }
+  return { list, byTail, byEmail, byName, fullNames, size: list.length }
+}
+
+// The card whose name words are all in this name ("Tomas Petras Rupšys" on an app,
+// "Rupšys Tomas" on the card), if exactly one card fits.
+function bySubset(idx, name) {
+  const words = new Set(nameKey(name).split(' ').filter(Boolean))
+  if (words.size < 2) return null
+  const fits = (idx.fullNames || []).filter(([w]) => [...w].every((x) => words.has(x)))
+  return fits.length === 1 ? fits[0][1] : null
 }
 
 // The contact card for a chat, if there is one: by phone number (WhatsApp,
-// iMessage), email (iMessage), or for apps without numbers (Messenger,
-// Instagram, Telegram) by exact, unique full name.
+// iMessage, SMS), email (iMessage), or for apps without numbers (Messenger,
+// Instagram, Telegram) by a full name that only one card has, in any word order.
 export function contactFor(idx, { phone, email, names = [] }) {
   if (!idx?.size) return null
   if (phone) { const c = idx.byTail.get(tail(phone)); if (c) return c }
   if (email) { const c = idx.byEmail.get(email.toLowerCase()); if (c) return c }
-  for (const n of names) { const c = n && idx.byName.get(normName(n)); if (c) return c }
+  for (const n of names) { const c = n && idx.byName.get(nameKey(n)); if (c) return c }
+  for (const n of names) { const c = n && bySubset(idx, n); if (c) return c }
   return null
 }
 

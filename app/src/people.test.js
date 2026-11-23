@@ -104,6 +104,12 @@ test('bridgev2 room types: group DMs and spaces are not people', () => {
   assert.equal(m.info.sp.kind, 'space')
   assert.equal(m.connections.length, 0)
   assert.equal(m.info.fbgo.network, 'facebook')
+  // a WhatsApp group with only one other person left is still a group, not a DM with them
+  const g2 = { ...base, id: 'g2', name: 'Revingis', bridge: { ...base.bridge, 'com.beeper.room_type': undefined, channel: { id: '1203@g.us' } } }
+  assert.equal(buildModel({ g2 }, {}, ME, null).info.g2.kind, 'group')
+  // ...but Messenger's unnamed 2-person "group" threads are really 1:1 chats
+  const m1 = { ...base, id: 'm1', name: null, bridge: { ...base.bridge, 'com.beeper.room_type': undefined, channel: { id: '7723' } } }
+  assert.equal(buildModel({ m1 }, {}, ME, null).info.m1.kind, 'dm')
 })
 
 test('iMessage: is_group flag and escaped phone numbers', async () => {

@@ -54,6 +54,10 @@ export function classifyRoom(room, me, direct) {
   if (imGroup !== undefined && !type) return imGroup ? 'group' : 'dm'
   if (type === 'dm') return 'dm'
   if (type === 'group' || type === 'space') return type === 'space' ? 'space' : 'group'
+  // bridgev2 (WhatsApp, Messenger, Instagram, Telegram) marks every DM. An unmarked room with a
+  // name is a real group even with one other person left (a 2-person WhatsApp group "Revingis");
+  // an unnamed one with one other person is how Messenger keeps some plain 1:1 chats, so it's a DM.
+  if (!type && imGroup === undefined && (room.name || humans.length !== 1)) return 'group'
   if (direct.has(room.id) && humans.length <= 1) return 'dm'
   return humans.length === 1 && (room.joinedCount || 0) <= 3 ? 'dm' : 'group'
 }

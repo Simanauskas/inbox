@@ -24,10 +24,10 @@ export default function Inbox({ ctx, selected }) {
   // Bridges create a room for every contact/thread they find, even with no
   // messages (e.g. encrypted Messenger chats without restored history). Keep
   // those out of the way until something is said in them.
-  const active = items.filter((i) => i.lastEvent || i.typing)
+  const active = items.filter((i) => i.lastEvent || i.typing || i.unread > 0)
   const filtered = q || filter !== 'all'
   const home = () => { setQ(''); setFilter('all'); setShowEmpty(false); document.querySelector('.inbox .list')?.scrollTo({ top: 0, behavior: 'smooth' }) }
-  const empty = items.filter((i) => !i.lastEvent && !i.typing)
+  const empty = items.filter((i) => !i.lastEvent && !i.typing && !i.unread) // unread chats always stay visible
 
   return (
     <div className="page inbox">

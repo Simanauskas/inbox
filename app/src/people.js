@@ -85,16 +85,11 @@ export function lastActivity(room) {
   return m ? m.origin_server_ts : room.createTs || 0
 }
 
-export function unreadCount(room, me) {
-  const receipt = room.receipts?.[me]
-  const idx = receipt ? room.timeline.findIndex((e) => e.event_id === receipt) : -1
-  if (idx < 0) return room.notificationCount || 0
-  let n = 0
-  for (let i = idx + 1; i < room.timeline.length; i++) {
-    const e = room.timeline[i]
-    if (e.sender !== me && isDisplayable(e)) n++
-  }
-  return Math.max(n, room.notificationCount || 0)
+// The server's count: it knows your read receipts on every device and skips what the
+// push rules mute, and it's the number notifications show. (Counting the loaded
+// timeline ourselves over-counted, e.g. after bridges imported old history.)
+export function unreadCount(room) {
+  return room.notificationCount || 0
 }
 
 export function normName(s) {

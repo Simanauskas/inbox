@@ -379,3 +379,10 @@ li:last-child .row-main { border-bottom: 0; }
 .list-ticks.seen { color: var(--accent); font-weight: 800; }
 .row-preview .typing-label { color: var(--accent); }
 .compose-row > .icon-btn { padding-left: 6px; padding-right: 6px; flex: none; }
+
+/* iPhone app: Face ID lock and the call sheet */
+.lock-screen { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--muted); }
+.lock-screen h2 { color: var(--text); margin: 0; }
+.lock-screen .primary { min-width: 160px; }
+.call-sheet h3 { margin: 4px 4px 0; }
+.call-sheet .wide-btn { margin: 0; }

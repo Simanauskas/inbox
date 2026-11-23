@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { isNative, lockEnabled, setLockEnabled, biometryName, unlock } from '../native.js'
 import { go, back } from '../router.js'
 import { PEOPLE_TYPE } from '../matrix.js'
 import { normConfig } from '../people.js'
@@ -113,7 +114,9 @@ export default function Settings({ ctx }) {
         <Reactions client={client} cfg={cfg} />
 
         <h3 className="section">Notifications</h3>
-        <Notifications client={client} />
+        {isNative ? <p className="hint">Notifications in the iPhone app come in the next update. Until then, keep the Home Screen version for notifications.</p> : <Notifications client={client} />}
+
+        {isNative && <><h3 className="section">Privacy</h3><LockSetting /></>}
 
         <h3 className="section">Connected apps</h3>
         <p className="hint">Each app is connected through a bridge bot on your server. Open one and follow its instructions to log in.</p>
@@ -143,6 +146,28 @@ export default function Settings({ ctx }) {
           <button className="wide-btn danger" onClick={async () => { await disablePush(client).catch(() => {}); await client.logout(); onLogout() }}>Sign out</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// iPhone app: lock Inbox with Face ID (or the passcode)
+function LockSetting() {
+  const [on, setOn] = useState(lockEnabled)
+  const [kind, setKind] = useState(null)
+  useEffect(() => { biometryName().then(setKind).catch(() => setKind(null)) }, [])
+  if (!kind) return <p className="hint">Set up Face ID or a passcode on this iPhone to lock Inbox.</p>
+  async function toggle() {
+    if (!on && !(await unlock())) return // prove it works before turning it on
+    setLockEnabled(!on)
+    setOn(!on)
+  }
+  return (
+    <div className="card">
+      <label className="radio">
+        <input type="checkbox" checked={on} onChange={toggle} />
+        <span>Lock with {kind}</span>
+      </label>
+      <p className="muted small">Asks when you open Inbox and after it's been in the background for a minute.</p>
     </div>
   )
 }

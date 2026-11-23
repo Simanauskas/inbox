@@ -253,3 +253,19 @@ test('auto-combine: same number or same contact card by phone/email, never by na
   const cfg2 = unlinkRoom(cfg, jonas.personId, 'sms')
   assert.equal(autoMerges(buildModel(r, {}, ME, cfg2, idx)).length, 0)
 })
+
+test('call hand-off: WhatsApp, FaceTime, phone and Messenger links', async () => {
+  const { callOptions } = await import('./calls.js')
+  const info = {
+    wa: { network: 'whatsapp', phone: null },
+    im: { network: 'imessage', phone: '37061111111' },
+    ime: { network: 'imessage', email: 'jonas@example.com' },
+    fb: { network: 'facebook', remote: '@facebook_1473:x' },
+  }
+  const o = callOptions({ rooms: ['wa', 'im', 'ime', 'fb'], contact: { p: ['8 611 11111'] } }, info)
+  assert.deepEqual(o.map((x) => x.href), [
+    'https://wa.me/37061111111', 'facetime-audio://+37061111111', 'facetime://+37061111111',
+    'facetime://jonas@example.com', 'tel:+37061111111', 'fb-messenger://user-thread/1473',
+  ])
+  assert.deepEqual(callOptions({ rooms: ['x'] }, { x: { network: 'telegram' } }), [])
+})

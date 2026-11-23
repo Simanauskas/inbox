@@ -1,4 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { isNative, pickPhotos } from '../native.js'
+import { callOptions } from '../calls.js'
 import { go, back } from '../router.js'
 import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig } from '../people.js'
 import { networkInfo } from '../networks.js'
@@ -107,7 +109,7 @@ export default function Thread({ ctx, item }) {
 
   return (
     <div className="page thread">
-      <TopBar onBack={back}>
+      <TopBar onBack={back} right={<CallButton item={item} model={model} />}>
         <div className="thread-head">
           <button className="thread-avatar" onClick={() => go('p', item.key)} aria-label={`About ${item.name}`}>
             <Avatar client={client} mxc={item.avatarUrl} name={item.name} size={36} />
@@ -438,6 +440,12 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
     setTimeout(() => area.current?.focus(), 0)
   }
 
+  // in the iPhone app the photo library opens directly; in the browser, the file picker
+  async function openPicker() {
+    if (!isNative) { fileInput.current?.click(); return }
+    try { addFiles(await pickPhotos()) } catch (e) { setErr(`Couldn't open your photos: ${e.message}`) }
+  }
+
   function onFiles(e) {
     const files = [...e.target.files]
     e.target.value = ''
@@ -526,7 +534,7 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
           {/* One picker for photos, videos and files (on the iPhone it opens Apple's menu:
               Photo Library / Take Photo or Video / Choose Files; a web app can't skip it),
               plus a camera button on phones that goes straight to the camera. */}
-          <button className="icon-btn" onClick={() => fileInput.current?.click()} aria-label={touch ? 'Photos, videos and files' : 'Attach files'}>
+          <button className="icon-btn" onClick={openPicker} aria-label={touch ? 'Photos and videos' : 'Attach files'}>
             <Icon name={touch ? 'gallery' : 'plus'} />
           </button>
           {touch && !text && <button className="icon-btn" onClick={() => cameraInput.current?.click()} aria-label="Take a photo or video"><Icon name="camera" /></button>}
@@ -588,4 +596,29 @@ function useWhatsAppViewing(client, model, item) {
       if (on) client.viewing(wa, false)
     }
   }, [client, wa])
+}
+
+// Calls happen in the app that can make them (no bridge carries calls): WhatsApp,
+// FaceTime / phone, Messenger. One option opens directly; several show a short menu.
+function CallButton({ item, model }) {
+  const [open, setOpen] = useState(false)
+  if (item.kind !== 'person') return null
+  const opts = callOptions(item, model.info)
+  if (!opts.length) return null
+  const go = (href) => { setOpen(false); window.location.href = href }
+  return (
+    <>
+      <button className="icon-btn" aria-label={`Call ${item.name}`} onClick={() => (opts.length === 1 ? go(opts[0].href) : setOpen(true))}><Icon name="phone" /></button>
+      {open && (
+        <div className="sheet-backdrop" onClick={() => setOpen(false)}>
+          <div className="sheet call-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Call ${item.name}`}>
+            <h3>Call {item.name}</h3>
+            <p className="muted small">Calls open in the app that makes them.</p>
+            {opts.map((o) => <button key={o.href} className="wide-btn" onClick={() => go(o.href)}>{o.label}</button>)}
+            <button className="text-btn" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
 }

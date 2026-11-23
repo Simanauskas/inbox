@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react'
 import { Client, PEOPLE_TYPE } from './matrix.js'
+import { lockEnabled, unlock, onResume } from './native.js'
 import { buildModel, suggestions, previewText, autoMerges, applyAutoMerges } from './people.js'
 import { networkInfo } from './networks.js'
 import Login from './ui/Login.jsx'
@@ -12,6 +13,7 @@ import Search from './ui/Search.jsx'
 import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from './push.js'
 import { idbGet, idbDel, idbSet } from './idb.js'
 import { indexContacts } from './contacts.js'
+import { Icon } from './ui/common.jsx'
 
 // Your phone book: the server puts it (from BlueBubbles on the Mac) in your
 // Matrix media and points to it from account data fit.simas.inbox.contacts.
@@ -59,7 +61,41 @@ export default function App() {
   if (!session) {
     return <Login onLogin={(s) => { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)) } catch {} setSession(s) }} />
   }
-  return <Main key={session.accessToken} session={session} onLogout={() => { try { localStorage.removeItem(SESSION_KEY) } catch {} saveSessionForWorker(null); idbDel('contacts'); setSession(null) }} />
+  return (
+    <FaceIdLock>
+      <Main key={session.accessToken} session={session} onLogout={() => { try { localStorage.removeItem(SESSION_KEY) } catch {} saveSessionForWorker(null); idbDel('contacts'); setSession(null) }} />
+    </FaceIdLock>
+  )
+}
+
+// iPhone app only: when "Lock with Face ID" is on, ask on opening and after Inbox has
+// been in the background for over a minute. The app keeps running underneath.
+function FaceIdLock({ children }) {
+  const [locked, setLocked] = useState(lockEnabled)
+  const away = useRef(0)
+  const tryUnlock = useCallback(async () => { if (await unlock()) setLocked(false) }, [])
+  useEffect(() => { if (locked) tryUnlock() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let off = () => {}
+    onResume((active) => {
+      if (!lockEnabled()) return
+      if (!active) { away.current = Date.now(); return }
+      if (away.current && Date.now() - away.current > 60_000) { setLocked(true); tryUnlock() }
+    }).then((f) => { off = f })
+    return () => off()
+  }, [tryUnlock])
+  return (
+    <>
+      {children}
+      {locked && (
+        <div className="lock-screen">
+          <Icon name="lock" size={40} />
+          <h2>Inbox is locked</h2>
+          <button className="primary" onClick={tryUnlock}>Unlock</button>
+        </div>
+      )}
+    </>
+  )
 }
 
 function useHashRoute() {

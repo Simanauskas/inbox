@@ -204,3 +204,18 @@ commands), recording voice messages.
   client changes also run `dev/e2e.mjs`.
 - Explain things to him in plain words; he's technical enough to run
   commands but isn't a developer. Give commands in separate copyable blocks.
+
+## iPhone app (native, TestFlight) — started 23 Nov 2026
+
+Capacitor 8 shell around the same React app: `app/capacitor.config.json` (appId **fit.simas.inbox**),
+Xcode project in `app/ios` (SPM, iPhone only, iOS 16+; Info.plist has photo/camera/mic/Face ID texts and
+`LSApplicationQueriesSchemes` for whatsapp/fb-messenger/facetime). Developer team id is in
+`.github/workflows/ios.yml` (he is Admin on that team). The workflow builds on a GitHub Mac (newest Xcode),
+signs automatically with the App Store Connect API key (secrets ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_P8),
+build number = run number, uploads to TestFlight; runs on pushes touching `app/**` or by hand.
+Native bits (`app/src/native.js`, no-ops in the browser): photo library opens directly
+(@capawesome/capacitor-file-picker pickMedia), Face ID lock (@aparajita/capacitor-biometric-auth, Settings →
+Privacy), service worker/web push off inside the app. Call button in the chat header (`calls.js`, also on
+the web): no bridge carries calls, so it hands off to wa.me / facetime(-audio):// / tel: / fb-messenger://.
+Planned: stage 2 native push (APNs key → Sygnal on sky, @capacitor/push-notifications), stage 3 recent-photos
+grid. "Default messaging app" (EU managed entitlement) deliberately not requested.

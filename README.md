@@ -187,6 +187,19 @@ cd server && docker compose pull && docker compose up -d
 Bridges need updating every few weeks, because the apps change their
 protocols. If a bridge stops working, updating usually fixes it.
 
+The Messenger bridge on the server is our own build (`META_IMAGE=local/mautrix-meta:sky-history`
+in `.env`), so `docker compose pull` skips it. It's the normal bridge plus
+`server/meta/deep-history.patch`, which lets a new chat fetch its whole encrypted
+history instead of only the newest ~80 messages. To update it, change `META_REV` in
+`server/meta/build-meta.sh` to the newer version and run:
+
+```bash
+cd /root/server && bash meta/build-meta.sh && docker compose up -d facebook
+```
+
+If the patch no longer applies, remove the `META_IMAGE` line from `.env` to go back to
+the normal bridge. New chats will then get ~80 messages again.
+
 ## Backups
 
 Configs, keys and media are in `server/data/`; the database lives in Docker's

@@ -96,7 +96,8 @@ extra_of() {
     telegram) echo '| .network.api_id = env(TELEGRAM_API_ID) | .network.api_hash = strenv(TELEGRAM_API_HASH)' ;;
     # most Messenger 1:1 chats are end-to-end encrypted; their history only comes
     # from Messenger's encrypted backup, which the bridge restores with your 6-digit PIN
-    facebook) echo '| .network.e2ee_backfill = true' ;;
+    # and fetch up to 10000 messages per chat (needs sky's patched bridge, see build-meta.sh)
+    facebook) echo '| .network.e2ee_backfill = true | .backfill.max_initial_messages = 10000' ;;
     *) echo '' ;;
   esac
 }

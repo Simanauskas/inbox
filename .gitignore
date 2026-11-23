@@ -8,3 +8,4 @@ server/backups/
 server/inbox-move.tar.gz
 server/restore-errors.log
 mac/.env
+__pycache__/

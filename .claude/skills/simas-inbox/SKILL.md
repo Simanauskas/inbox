@@ -131,6 +131,9 @@ composer shows "Sending via <app> ▾" plus the reason.
 
 ## Status (as of 22 Nov 2026, evening)
 
+He calls this VPS **"sky"** (since 23 Nov 2026). Messenger runs our own bridge build
+there for full encrypted history; see "Messenger history" in `references/server.md`.
+
 **Live on a VPS: Hostika.lt VX3** (Lithuania; 6 vCPU, 10 GB, 100 GB NVMe,
 Ubuntu 24.04), IP **38.210.227.208**, hostname inbox.simas.fit. Server folder
 **`/root/server`** (moved with `move.sh`; logins, chats and account data came

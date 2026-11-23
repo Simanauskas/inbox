@@ -50,7 +50,7 @@ registrations with the same id), Postgres DB per bridge,
 `personal_filtering_spaces: false`, double puppeting via
 `double_puppet.secrets[server] = "as_token:<doublepuppet token>"`,
 `encryption.allow: false`, `backfill.enabled: true`,
-`max_initial_messages: 1000`. WhatsApp: `network.history_sync.request_full_sync: true`
+`max_initial_messages: 1000` (Messenger 10000). WhatsApp: `network.history_sync.request_full_sync: true`
 (a year of history) and `network.displayname_template` = your contact
 name (`.FullName`) without the default " (WA)" tag (the app also strips such
 tags with `cleanName`). Telegram: `network.api_id/api_hash`. Messenger:
@@ -60,6 +60,29 @@ restores Messenger's encrypted backup with his 6-digit secure-storage PIN,
 asked during login (existing login: `list-logins`, then `relogin <id>` in
 the Messenger bot chat). The app tucks message-less chats into a collapsed
 "N chats with no messages yet" row at the bottom of the inbox.
+
+**Messenger history (learned 23 Nov 2026).** Chats created before the backup was
+unlocked stay empty forever: on Synapse, forward backfill only adds messages *newer*
+than the room's latest one ("Cutting off forward backfill messages older than latest
+bridged message"), and the backwards queue needs Beeper's server. Messenger's history
+server also returns one page (~80 msgs) per request and upstream only asks once.
+Fixes on sky:
+- Own bridge build `local/mautrix-meta:sky-history` (`META_IMAGE` in `.env`), from
+  `server/meta/build-meta.sh` + `deep-history.patch`: for a fresh room (no anchor) it
+  pages back until `max_initial_messages` (10000, set by setup.sh for facebook), one
+  chat at a time (global mutex), 3–6 s between pages. Catch-up after reconnects stays
+  one page (an early version paged there too: wasteful, fixed).
+- To refill an existing chat: stop bridge → delete its `message`/`reaction` rows and
+  set `portal.mxid = NULL` in the `facebook` DB → start → bot command
+  `create-portal <portal id>` in the management room (the bridge often recreates it
+  by itself on start). New room id ⇒ swap old→new in account data
+  `fit.simas.inbox.people` and leave+forget the old room as @s (double-puppet
+  as_token with `?user_id=`). Only works for encrypted DMs (thread_type 15);
+  non-encrypted groups can't be refetched this way (no bundled data). Backups and
+  logs of the 23 Nov run: `/root/server/backups/pre-fb-history-*`, `fb-rebuild*.log`.
+- Media from the backup older than ~10 months fails with 403 (the CDN copy is gone);
+  the bridge has no other way to fetch it, so the room shows "Failed to transfer
+  media". Recent photos/videos/voice come through.
 
 **iMessage (mautrix-imessage, legacy layout)** with `imessage.platform: bluebubbles`,
 `bluebubbles_url` (default `http://host.docker.internal:1234`; compose adds

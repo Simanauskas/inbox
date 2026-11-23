@@ -184,8 +184,8 @@ function dayLabel(ts) {
   return d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) })
 }
 
-const TICKS = { sending: '◌', sent: '✓', delivered: '✓✓', seen: '✓✓' }
-const TICK_TITLE = { sending: 'Sending', sent: 'Sent to your server', delivered: 'Delivered', seen: 'Seen' }
+export const TICKS = { sending: '◌', sent: '✓', delivered: '✓✓', seen: '✓✓' }
+export const TICK_TITLE = { sending: 'Sending', sent: 'Sent to your server', delivered: 'Delivered', seen: 'Seen' }
 
 // Press and hold (or right-click) a message for reactions and actions, like
 // every other chat app. A plain tap does nothing (tapping a photo opens it).

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { go } from '../router.js'
-import { previewText, normName } from '../people.js'
+import { previewText, normName, deliveryStatus } from '../people.js'
+import { TICKS, TICK_TITLE } from './Thread.jsx'
 import { Avatar, NetBadge, TopBar, Icon, timeShort } from './common.jsx'
 import { networkInfo } from '../networks.js'
 
@@ -101,7 +102,9 @@ function Row({ client, i, selected }) {
             <span className="row-time">{i.lastEvent ? timeShort(i.lastTs) : ''}</span>
           </div>
           <div className="row-bottom">
-            <span className={`row-preview ${i.unread ? 'bold' : ''}`}>{i.typing ? <i>typing…</i> : i.lastEvent ? previewText(i.lastEvent, client.userId) : <i>No messages yet</i>}</span>
+            <span className={`row-preview ${i.unread ? 'bold' : ''}`}>
+              {i.typing ? <i className="typing-label">typing…</i> : i.lastEvent ? <><ListTicks client={client} i={i} />{previewText(i.lastEvent, null)}</> : <i>No messages yet</i>}
+            </span>
             {i.unread > 0 && <span className="badge">{i.unread}</span>}
           </div>
         </div>
@@ -113,4 +116,13 @@ function Row({ client, i, selected }) {
 function StatusLine({ client }) {
   if (client.status === 'live' || client.status === 'connecting') return null
   return <div className="status-line">{client.status === 'offline' ? 'Offline. Reconnecting…' : 'Server error. Retrying…'}</div>
+}
+
+// ✓ / ✓✓ / blue ✓✓ before the preview when the last message is yours
+function ListTicks({ client, i }) {
+  const me = client.userId
+  if (i.lastEvent?.sender !== me) return null
+  const status = deliveryStatus(client.rooms[i.lastRoom], i.lastEvent, me)
+  if (!status || status === 'failed') return null
+  return <span className={`list-ticks ${status}`} title={TICK_TITLE[status]}>{TICKS[status]} </span>
 }

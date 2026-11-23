@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { isNative, pickPhotos } from '../native.js'
+import { createPortal } from 'react-dom'
+import { isNative, pickPhotos, openExternal } from '../native.js'
 import { callOptions } from '../calls.js'
 import { go, back } from '../router.js'
 import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig } from '../people.js'
@@ -605,11 +606,11 @@ function CallButton({ item, model }) {
   if (item.kind !== 'person') return null
   const opts = callOptions(item, model.info)
   if (!opts.length) return null
-  const go = (href) => { setOpen(false); window.location.href = href }
+  const go = (href) => { setOpen(false); openExternal(href).catch(() => {}) }
   return (
     <>
       <button className="icon-btn" aria-label={`Call ${item.name}`} onClick={() => (opts.length === 1 ? go(opts[0].href) : setOpen(true))}><Icon name="phone" /></button>
-      {open && (
+      {open && createPortal(
         <div className="sheet-backdrop" onClick={() => setOpen(false)}>
           <div className="sheet call-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Call ${item.name}`}>
             <h3>Call {item.name}</h3>
@@ -617,7 +618,8 @@ function CallButton({ item, model }) {
             {opts.map((o) => <button key={o.href} className="wide-btn" onClick={() => go(o.href)}>{o.label}</button>)}
             <button className="text-btn" onClick={() => setOpen(false)}>Cancel</button>
           </div>
-        </div>
+        </div>,
+        document.body, // not inside the header: its blur would trap a fixed overlay
       )}
     </>
   )

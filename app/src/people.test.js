@@ -265,7 +265,8 @@ test('call hand-off: WhatsApp, FaceTime, phone and Messenger links', async () =>
   const o = callOptions({ rooms: ['wa', 'im', 'ime', 'fb'], contact: { p: ['8 611 11111'] } }, info)
   assert.deepEqual(o.map((x) => x.href), [
     'https://wa.me/37061111111', 'facetime-audio://+37061111111', 'facetime://+37061111111',
-    'facetime://jonas@example.com', 'tel:+37061111111', 'fb-messenger://user-thread/1473',
+    'fb-messenger://user-thread/1473', 'tel:+37061111111',
   ])
+  assert.deepEqual(callOptions({ rooms: ['ime'] }, info).map((x) => x.href), ['facetime://jonas@example.com'])
   assert.deepEqual(callOptions({ rooms: ['x'] }, { x: { network: 'telegram' } }), [])
 })

@@ -20,14 +20,18 @@ export function callOptions(item, info) {
   for (const p of item.contact?.p || []) { const n = normalizePhone(p); if (n) phones.push(n) }
   const uniq = [...new Set(phones)]
   const nets = new Set(item.rooms.map((id) => info[id]?.network))
-  if (nets.has('whatsapp') && uniq[0]) add('WhatsApp', `https://wa.me/${uniq[0]}`)
-  for (const p of uniq) add(`FaceTime audio · +${p}`, `facetime-audio://+${p}`)
-  for (const p of uniq) add(`FaceTime video · +${p}`, `facetime://+${p}`)
-  for (const e of [...new Set(emails)]) add(`FaceTime · ${e}`, `facetime://${e}`)
-  for (const p of uniq) add(`Phone · +${p}`, `tel:+${p}`)
+  const main = uniq[0] // their number: from the chats, else the contact card
+  if (nets.has('whatsapp') && main) add('WhatsApp', `https://wa.me/${main}`)
+  if (main) {
+    add('FaceTime audio', `facetime-audio://+${main}`)
+    add('FaceTime video', `facetime://+${main}`)
+  } else {
+    for (const e of [...new Set(emails)].slice(0, 1)) add('FaceTime', `facetime://${e}`)
+  }
   for (const id of item.rooms) {
     const i = info[id]
     if (i?.network === 'facebook' && fbId(i.remote)) add('Messenger', `fb-messenger://user-thread/${fbId(i.remote)}`)
   }
+  if (main) add(`Phone · +${main}`, `tel:+${main}`)
   return out
 }

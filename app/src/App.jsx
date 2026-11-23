@@ -14,6 +14,7 @@ import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from 
 import { idbGet, idbDel, idbSet } from './idb.js'
 import { indexContacts } from './contacts.js'
 import { Icon } from './ui/common.jsx'
+import { back } from './router.js'
 
 // Your phone book: the server puts it (from BlueBubbles on the Mac) in your
 // Matrix media and points to it from account data fit.simas.inbox.contacts.
@@ -119,6 +120,7 @@ function Main({ session, onLogout }) {
   const version = useSyncExternalStore(client.subscribe, client.getVersion)
   const route = useHashRoute()
   const [wide, setWide] = useState(() => matchMedia('(min-width: 900px)').matches)
+  useEdgeSwipeBack(!!route.view && route.view !== 'inbox' && !wide)
 
   useEffect(() => {
     const mq = matchMedia('(min-width: 900px)')
@@ -226,4 +228,62 @@ function Main({ session, onLogout }) {
     )
   }
   return <div className="app">{page || <Inbox ctx={ctx} />}</div>
+}
+
+// Swipe in from the left edge to go back, like native iPhone apps (the Home Screen
+// version and the iPhone app don't get Safari's own gesture). The page follows your
+// finger; let go past a third of the screen (or with a quick flick) to go back.
+function useEdgeSwipeBack(enabled) {
+  useEffect(() => {
+    if (!enabled) return
+    let start = null
+    let page = null
+    const reset = (animate) => {
+      if (!page) return
+      page.style.transition = animate ? 'transform 0.2s ease-out' : ''
+      page.style.transform = ''
+      const p = page
+      setTimeout(() => { p.style.transition = '' }, 220)
+    }
+    const onStart = (e) => {
+      const t = e.touches[0]
+      if (e.touches.length !== 1 || t.clientX > 24) return
+      start = { x: t.clientX, y: t.clientY, t: Date.now(), dragging: false }
+      page = document.querySelector('.page:not(.inbox)') || document.querySelector('.page')
+    }
+    const onMove = (e) => {
+      if (!start) return
+      const t = e.touches[0]
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      if (!start.dragging) {
+        if (Math.abs(dy) > 12 && Math.abs(dy) > dx) { start = null; return } // a scroll, not a swipe
+        if (dx < 10) return
+        start.dragging = true
+      }
+      e.preventDefault()
+      if (page) page.style.transform = `translateX(${Math.max(0, dx)}px)`
+    }
+    const onEnd = (e) => {
+      if (!start) return
+      const dx = (e.changedTouches[0]?.clientX || 0) - start.x
+      const fast = dx > 60 && Date.now() - start.t < 250
+      const was = start.dragging
+      start = null
+      if (was && (dx > window.innerWidth / 3 || fast)) {
+        if (page) { page.style.transition = 'transform 0.15s ease-out'; page.style.transform = `translateX(${window.innerWidth}px)` }
+        setTimeout(() => { reset(false); back() }, 150)
+      } else reset(true)
+    }
+    document.addEventListener('touchstart', onStart, { passive: true })
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onEnd, { passive: true })
+    document.addEventListener('touchcancel', onEnd, { passive: true })
+    return () => {
+      document.removeEventListener('touchstart', onStart)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onEnd)
+      document.removeEventListener('touchcancel', onEnd)
+    }
+  }, [enabled])
 }

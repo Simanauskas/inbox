@@ -52,3 +52,11 @@ export async function onResume(fn) {
   const h = await App.addListener('appStateChange', ({ isActive }) => fn(isActive))
   return () => h.remove()
 }
+
+// Hand a link to iOS (WhatsApp, FaceTime, phone, Messenger). Inside the app a plain
+// location change would try to load it in the app's own web view and do nothing.
+export async function openExternal(url) {
+  if (!isNative) { window.location.href = url; return }
+  const { AppLauncher } = await import('@capacitor/app-launcher')
+  await AppLauncher.openUrl({ url })
+}

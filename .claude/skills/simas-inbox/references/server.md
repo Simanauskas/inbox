@@ -154,3 +154,14 @@ not via as_token); lifted with the admin API
   rate limits). Clear `user.access_token` in the bridge DB when switching. All 720
   iMessage rooms were rebuilt with it on 23 Nov 2026. Synapse `max_upload_size` 1G
   (was 100M: big iMessage videos failed with "connection reset").
+
+**WhatsApp typing (23 Nov 2026).** WhatsApp only sends ChatPresence (typing) to a device
+that is "available"; the bridge never was, and bridgev2's `HandleMatrixViewingChat` is
+never called by the standard Matrix connector. sky runs `local/mautrix-whatsapp:sky`
+(`WHATSAPP_IMAGE`, `server/whatsapp/viewing.patch` adds `cmd/mautrix-whatsapp/viewing.go`):
+a `fit.simas.inbox.viewing` room event from @s (`{viewing: true|false}`) calls
+HandleMatrixViewingChat → presence available/unavailable; 75 s without a new one →
+unavailable. The app (`useWhatsAppViewing` in Thread.jsx) sends it every 30 s while a
+chat with a WhatsApp room is open, visible and focused; `client.viewing()`, never added
+to timelines. He agreed to show as online while a chat is open (may hold back WhatsApp's
+own phone notifications meanwhile).

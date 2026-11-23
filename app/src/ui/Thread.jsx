@@ -17,6 +17,7 @@ export default function Thread({ ctx, item }) {
   const multi = item.rooms.length > 1
   const isGroup = item.kind === 'group'
   const { entries, hasMore } = mergedTimeline(item, rooms)
+  useWhatsAppViewing(client, model, item)
   const scroller = useRef(null)
   const atBottom = useRef(true)
   const [loading, setLoading] = useState(false)
@@ -550,4 +551,32 @@ function EmojiSheet({ onPick, onClose }) {
       </div>
     </div>
   )
+}
+
+// While this chat is open and Inbox is in front, tell the WhatsApp bridge every 30 s
+// (it then shows you online on WhatsApp, like WhatsApp Web, and typing comes through);
+// "closed" when you leave or switch away. The bridge goes offline by itself after 75 s.
+function useWhatsAppViewing(client, model, item) {
+  const wa = item.rooms.find((id) => model.info[id]?.network === 'whatsapp')
+  useEffect(() => {
+    if (!wa) return
+    let on = false
+    const tick = () => {
+      const visible = document.visibilityState === 'visible' && document.hasFocus()
+      if (visible) { client.viewing(wa, true); on = true } else if (on) { client.viewing(wa, false); on = false }
+    }
+    tick()
+    const t = setInterval(tick, 30000)
+    const now = () => tick()
+    document.addEventListener('visibilitychange', now)
+    window.addEventListener('focus', now)
+    window.addEventListener('blur', now)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', now)
+      window.removeEventListener('focus', now)
+      window.removeEventListener('blur', now)
+      if (on) client.viewing(wa, false)
+    }
+  }, [client, wa])
 }

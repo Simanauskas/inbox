@@ -23,6 +23,8 @@ const SYNC_FILTER = filter(20)
 const CACHE_VERSION = 1
 const CACHE_EVENTS_PER_ROOM = 15
 
+export const VIEWING_TYPE = 'fit.simas.inbox.viewing'
+
 export const PEOPLE_TYPE = 'fit.simas.inbox.people'
 export const SETTINGS_TYPE = 'fit.simas.inbox.settings'
 
@@ -273,6 +275,7 @@ export class Client {
 
   // returns true if this was an event we hadn't seen
   addEvent(room, ev) {
+    if (ev.type === VIEWING_TYPE) return // Inbox's own "chat open" signal for the WhatsApp bridge
     const txn = ev.unsigned?.transaction_id
     if (txn) {
       const echo = room.byId[txn]
@@ -330,6 +333,12 @@ export class Client {
   }
 
   // --- sending ---
+  // Tell the WhatsApp bridge this chat is open (or closed), so it shows you online on
+  // WhatsApp and WhatsApp sends typing. No local echo; never shown in chats.
+  viewing(roomId, on) {
+    return this.api('PUT', `/_matrix/client/v3/rooms/${enc(roomId)}/send/${VIEWING_TYPE}/${txnId()}`, { viewing: on }).catch(() => {})
+  }
+
   async send(roomId, content, type = 'm.room.message') {
     const room = this.rooms[roomId]
     const id = txnId()

@@ -1,0 +1,93 @@
+diff --git a/cmd/mautrix-whatsapp/viewing.go b/cmd/mautrix-whatsapp/viewing.go
+new file mode 100644
+index 0000000..87c8699
+--- /dev/null
++++ b/cmd/mautrix-whatsapp/viewing.go
+@@ -0,0 +1,87 @@
++package main
++
++// sky: lets the Inbox app say "this chat is open", so the bridge shows you as
++// online on WhatsApp while you're looking at a chat (like WhatsApp Web) and
++// WhatsApp starts sending typing notifications. Inbox sends a
++// fit.simas.inbox.viewing event every ~30 s while a WhatsApp chat is open and
++// visible ({"viewing": false} when it closes); without a new one for 75 s the
++// bridge goes back to offline.
++
++import (
++	"context"
++	"sync"
++	"time"
++
++	"github.com/rs/zerolog"
++	"maunium.net/go/mautrix/bridgev2"
++	"maunium.net/go/mautrix/event"
++	"maunium.net/go/mautrix/id"
++)
++
++var ViewingEventType = event.Type{Type: "fit.simas.inbox.viewing", Class: event.MessageEventType}
++
++const viewingTimeout = 75 * time.Second
++
++var (
++	viewingLock   sync.Mutex
++	viewingTimers = map[id.UserID]*time.Timer{}
++)
++
++func setViewing(ctx context.Context, login *bridgev2.UserLogin, portal *bridgev2.Portal) {
++	api, ok := login.Client.(bridgev2.ChatViewingNetworkAPI)
++	if !ok {
++		return
++	}
++	if err := api.HandleMatrixViewingChat(ctx, &bridgev2.MatrixViewingChat{Portal: portal}); err != nil {
++		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to update chat viewing presence")
++	}
++}
++
++func handleViewing(ctx context.Context, evt *event.Event) {
++	log := m.Bridge.Log.With().Str("action", "inbox viewing").Stringer("room_id", evt.RoomID).Logger()
++	ctx = log.WithContext(context.Background())
++	user, err := m.Bridge.GetExistingUserByMXID(ctx, evt.Sender)
++	if err != nil || user == nil {
++		return
++	}
++	login := user.GetDefaultLogin()
++	if login == nil {
++		return
++	}
++	viewing := true
++	if v, ok := evt.Content.Raw["viewing"].(bool); ok {
++		viewing = v
++	}
++	var portal *bridgev2.Portal
++	if viewing {
++		portal, err = m.Bridge.GetPortalByMXID(ctx, evt.RoomID)
++		if err != nil || portal == nil {
++			return
++		}
++	}
++	setViewing(ctx, login, portal)
++	viewingLock.Lock()
++	defer viewingLock.Unlock()
++	if t := viewingTimers[user.MXID]; t != nil {
++		t.Stop()
++		delete(viewingTimers, user.MXID)
++	}
++	if viewing {
++		viewingTimers[user.MXID] = time.AfterFunc(viewingTimeout, func() {
++			viewingLock.Lock()
++			delete(viewingTimers, user.MXID)
++			viewingLock.Unlock()
++			setViewing(ctx, login, nil)
++		})
++	}
++}
++
++func init() {
++	prev := m.PostInit
++	m.PostInit = func() {
++		if prev != nil {
++			prev()
++		}
++		m.Matrix.EventProcessor.On(ViewingEventType, handleViewing)
++	}
++}

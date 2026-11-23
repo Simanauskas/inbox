@@ -205,6 +205,11 @@ from `server/imessage/`: upstream plus `full-history.patch`, so a new chat gets 
 messages (up to 10000) instead of the newest 1000. Rebuild it with
 `bash imessage/build-imessage.sh && docker compose up -d imessage`.
 
+The WhatsApp bridge is our own build as well (`WHATSAPP_IMAGE=local/mautrix-whatsapp:sky`),
+from `server/whatsapp/`: upstream plus `viewing.patch`. While a WhatsApp chat is open in
+Inbox you show as online on WhatsApp (like WhatsApp Web), so WhatsApp sends "typing…".
+Rebuild with `bash whatsapp/build-whatsapp.sh && docker compose up -d whatsapp`.
+
 ## Backups
 
 Configs, keys and media are in `server/data/`; the database lives in Docker's

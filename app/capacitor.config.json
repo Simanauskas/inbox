@@ -5,6 +5,13 @@
   "ios": {
     "contentInset": "never",
     "scheme": "Inbox",
-    "limitsNavigationsToAppBoundDomains": false
+    "limitsNavigationsToAppBoundDomains": false,
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
+    }
   }
 }

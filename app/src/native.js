@@ -60,3 +60,17 @@ export async function openExternal(url) {
   const { AppLauncher } = await import('@capacitor/app-launcher')
   await AppLauncher.openUrl({ url })
 }
+
+// App start: no "form" bar (up / down / ✓) above the keyboard. The app itself shrinks to
+// sit above the keyboard (capacitor.config.json Keyboard.resize = native), so the header
+// with the contact stays in view.
+export async function initNative() {
+  if (!isNative) return
+  try {
+    const { Keyboard } = await import('@capacitor/keyboard')
+    await Keyboard.setAccessoryBarVisible({ isVisible: false })
+    // while the keyboard is up there's no home bar to leave room for
+    Keyboard.addListener('keyboardWillShow', () => document.documentElement.classList.add('kb-open'))
+    Keyboard.addListener('keyboardWillHide', () => document.documentElement.classList.remove('kb-open'))
+  } catch {}
+}

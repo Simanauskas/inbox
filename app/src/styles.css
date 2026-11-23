@@ -388,3 +388,4 @@ li:last-child .row-main { border-bottom: 0; }
 .call-sheet .wide-btn { margin: 0; }
 .sheet { overflow-y: auto; }
 .call-sheet { max-height: calc(100vh - env(safe-area-inset-top) - 24px); }
+.kb-open .composer { padding-bottom: 6px; }

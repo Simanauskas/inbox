@@ -2,9 +2,10 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import './styles.css'
-import { isNative } from './native.js'
+import { isNative, initNative } from './native.js'
 
 createRoot(document.getElementById('root')).render(<App />)
+initNative()
 
 if ('serviceWorker' in navigator && import.meta.env.PROD && !isNative) {
   navigator.serviceWorker.register('/sw.js').catch(() => {})

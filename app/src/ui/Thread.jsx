@@ -228,7 +228,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
   const notice = c.msgtype === 'm.notice' && !mine
   const replyId = c['m.relates_to']?.['m.in_reply_to']?.event_id
   const quoted = replyId ? room?.byId[replyId] : null
-  const time = new Date(ev.origin_server_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = new Date(ev.origin_server_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
   return (
     <div ref={box} className={`msg ${mine ? 'out' : 'in'} ${first ? 'first' : ''} ${last ? 'last' : ''} ${notice ? 'notice' : ''} ${open ? 'open' : ''}`} style={{ '--net': networkInfo(net).color }}>

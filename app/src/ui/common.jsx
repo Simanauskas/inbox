@@ -75,7 +75,7 @@ export function timeShort(ts, now = Date.now()) {
   if (!ts) return ''
   const d = new Date(ts)
   const today = new Date(now)
-  if (d.toDateString() === today.toDateString()) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === today.toDateString()) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
   const diff = (now - ts) / 86400_000
   if (diff < 6) return d.toLocaleDateString([], { weekday: 'short' })
   if (d.getFullYear() === today.getFullYear()) return d.toLocaleDateString([], { day: 'numeric', month: 'short' })

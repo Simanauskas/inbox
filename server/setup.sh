@@ -150,7 +150,7 @@ imessage_config() {
     .bridge.user = "@" + strenv(ADMIN_USER) + ":" + strenv(SERVER_NAME) |
     .bridge.username_template = "imessage_{{.}}" |
     .bridge.displayname_template = "{{.}}" |
-    .bridge.login_shared_secret = "appservice" |
+    .bridge.login_shared_secret = "as_token:" + strenv(DP_TOKEN) |
     .bridge.personal_filtering_spaces = false |
     .bridge.encryption.allow = false |
     .bridge.delivery_receipts = true |
@@ -247,7 +247,7 @@ yq -i "
   .presence.enabled = false |
   .enable_registration = false |
   .enable_authenticated_media = true |
-  .max_upload_size = \"100M\" |
+  .max_upload_size = \"1G\" |
   .url_preview_enabled = false |
   .app_service_config_files = [$regs] |
   .ip_range_whitelist = [\"172.31.250.0/24\"] |

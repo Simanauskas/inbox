@@ -146,3 +146,11 @@ not via as_token); lifted with the admin API
   bridge, delete their `message`/`tapback`/`backfill_*` rows, `portal.mxid=NULL`,
   start; startup sync recreates the rooms. SMS and iMessage chats for one number are
   merged via `merged_chat`, so compare counts per target guid.
+- iMessage double puppeting used `login_shared_secret: appservice` = a normal device
+  token for @s, so Synapse ignored the `ts` of backfilled messages: my old messages
+  got the import time and old chats jumped to the top of the inbox. The patch adds
+  `login_shared_secret: "as_token:<doublepuppet token>"` (setup.sh sets it), which
+  acts as @s through the doublepuppet appservice like the bridgev2 bridges (also no
+  rate limits). Clear `user.access_token` in the bridge DB when switching. All 720
+  iMessage rooms were rebuilt with it on 23 Nov 2026. Synapse `max_upload_size` 1G
+  (was 100M: big iMessage videos failed with "connection reset").

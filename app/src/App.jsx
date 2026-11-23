@@ -156,8 +156,20 @@ function Main({ session, onLogout }) {
   const totalUnread = model.items.reduce((s, i) => s + i.unread, 0)
   useEffect(() => {
     document.title = totalUnread ? `(${totalUnread}) Inbox` : 'Inbox'
-    navigator.setAppBadge?.(totalUnread || undefined)?.catch?.(() => {})
+    // setAppBadge(undefined) would show an empty badge; clear it when nothing is unread
+    const nav = navigator
+    const p = totalUnread ? nav.setAppBadge?.(totalUnread) : nav.clearAppBadge?.()
+    p?.catch?.(() => {})
   }, [totalUnread])
+
+  // Chats the list doesn't show (bridge bot chats, spaces) still count as unread on the
+  // server, which sets the number on notifications and the app icon. Mark them read.
+  useEffect(() => {
+    if (!client.synced) return
+    for (const [id, i] of Object.entries(model.info)) {
+      if ((i.kind === 'connection' || i.kind === 'space') && (client.rooms[id]?.notificationCount || 0) > 0) client.markRead(id)
+    }
+  }, [model, client])
 
   const ctx = { client, model, sugg, findItem, wide, route, version, onLogout }
   let page = null

@@ -223,9 +223,10 @@ export function suggestions(model) {
 }
 
 // Chats that are certainly the same person: the same phone number, or the same contact
-// card found by phone number or email (e.g. iMessage on his email + iMessage and SMS on
-// his number). Combined without asking; chats you unlinked by hand are left alone, and so
-// is anything you said isn't the same person. Name-only matches stay suggestions.
+// card, once one of the chats is tied to that card by number or email (e.g. iMessage on
+// his number + WhatsApp and Messenger under the card's full name). Combined without
+// asking; chats you unlinked by hand are left alone, and so is anything you said isn't
+// the same person. Matches by name alone (no number or email anywhere) stay suggestions.
 export function autoMerges(model) {
   const { items, info, config } = model
   const skip = new Set(config.unlinked || [])
@@ -233,12 +234,21 @@ export function autoMerges(model) {
   const parent = new Map(people.map((p) => [p.key, p.key]))
   const find = (k) => (parent.get(k) === k ? k : (parent.set(k, find(parent.get(k))), parent.get(k)))
   const union = (a, b) => parent.set(find(a), find(b))
+  // A card counts once a chat is tied to it by number or email; chats that match that
+  // same card by its (unique) full name then join it: WhatsApp hides most numbers from
+  // linked devices, and Messenger/Instagram never had them.
+  const cardKey = (c) => 'c:' + (c.id || c.n)
+  const anchored = new Set()
+  for (const p of people) for (const id of p.rooms) {
+    const i = info[id]
+    if (i.contact && (i.contactBy === 'phone' || i.contactBy === 'email')) anchored.add(cardKey(i.contact))
+  }
   const seen = new Map()
   const link = (k, key) => { if (seen.has(k)) union(key, seen.get(k)); else seen.set(k, key) }
   for (const p of people) {
     for (const id of p.rooms) {
       const i = info[id]
-      if (i.contact && (i.contactBy === 'phone' || i.contactBy === 'email')) link('c:' + (i.contact.id || i.contact.n), p.key)
+      if (i.contact && anchored.has(cardKey(i.contact))) link(cardKey(i.contact), p.key)
       if (i.phone) link('p:' + i.phone.slice(-9), p.key)
     }
   }

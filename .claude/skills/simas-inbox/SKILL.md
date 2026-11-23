@@ -56,7 +56,8 @@ app (browser) ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ What
   `channel['fi.mau.imessage.is_group']`, else member heuristics.
 - **Auto-combine** (`autoMerges`, run from App.jsx after sync): rooms with the same phone number
   (last 9 digits) or the same contact card matched by phone/email are combined without asking
-  (iMessage on email + iMessage + SMS on the number are separate chats on the Mac). Name-only
+  (iMessage on email + iMessage + SMS on the number are separate chats on the Mac). A card tied by
+  number/email also pulls in chats matching that card only by name (WA LIDs hide numbers). Name-only
   matches stay suggestions. Unlinking a room adds it to config `unlinked` so it isn't re-combined;
   dismissed suggestion keys are respected too.
 - **Merge suggestions**: same normalised name (diacritics folded: Eglė = Egle,

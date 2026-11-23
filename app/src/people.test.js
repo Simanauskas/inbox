@@ -237,15 +237,16 @@ test('auto-combine: same number or same contact card by phone/email, never by na
     sms: room('sms', 'imessage', '@imessage_+37061111111:x', 'Jonas Kazlauskas', [msg('@imessage_+37061111111:x', now - 2 * H)], { bridge: { bridgebot: '@imessagebot:x', protocol: { id: 'imessage-sms' }, channel: { 'fi.mau.imessage.is_group': false } } }),
     fb: room('fb', 'facebook', '@facebook_7:x', 'Rimas Vaitkus', [msg('@facebook_7:x', now)]),
     ig: room('ig', 'instagram', '@instagram_9:x', 'Rimas Vaitkus', [msg('@instagram_9:x', now)]),
+    wa: room('wa', 'whatsapp', '@whatsapp_lid-123:x', 'Jonas Kazlauskas', [msg('@whatsapp_lid-123:x', now)]),
   }
   const m = buildModel(r, {}, ME, null, idx)
   const merges = autoMerges(m)
   assert.equal(merges.length, 1, 'only the number/email group, not the name-only one')
-  assert.deepEqual(merges[0].members.flatMap((x) => x.rooms).sort(), ['ime', 'imp', 'sms'])
+  assert.deepEqual(merges[0].members.flatMap((x) => x.rooms).sort(), ['ime', 'imp', 'sms', 'wa'], 'WhatsApp joins by the card name once a number ties the card')
   const cfg = applyAutoMerges(null, merges)
   const m2 = buildModel(r, {}, ME, cfg, idx)
   const jonas = m2.items.find((i) => i.rooms.includes('ime'))
-  assert.deepEqual([...jonas.rooms].sort(), ['ime', 'imp', 'sms'])
+  assert.deepEqual([...jonas.rooms].sort(), ['ime', 'imp', 'sms', 'wa'])
   assert.equal(jonas.name, 'Jonas Kazlauskas')
   assert.equal(autoMerges(m2).length, 0, 'nothing left to do')
   // unlinking by hand sticks

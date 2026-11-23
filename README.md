@@ -200,6 +200,11 @@ cd /root/server && bash meta/build-meta.sh && docker compose up -d facebook
 If the patch no longer applies, remove the `META_IMAGE` line from `.env` to go back to
 the normal bridge. New chats will then get ~80 messages again.
 
+The iMessage bridge is our own build too (`IMESSAGE_IMAGE=local/mautrix-imessage:sky`),
+from `server/imessage/`: upstream plus `full-history.patch`, so a new chat gets all its
+messages (up to 10000) instead of the newest 1000. Rebuild it with
+`bash imessage/build-imessage.sh && docker compose up -d imessage`.
+
 ## Backups
 
 Configs, keys and media are in `server/data/`; the database lives in Docker's

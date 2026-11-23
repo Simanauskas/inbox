@@ -138,3 +138,11 @@ Synapse rate-limiting @s (the iMessage bridge sends my own messages as a real lo
 not via as_token); lifted with the admin API
 `POST /_synapse/admin/v1/users/@s:matrix.simas.fit/override_ratelimit {"messages_per_second":0,"burst_count":0}`
 (stored in Synapse's DB, survives restarts).
+- iMessage bridge also stops at 1000 msgs per new chat (`GetMessagesWithLimit` queries
+  BlueBubbles with `paginate=false`). sky runs `local/mautrix-imessage:sky`
+  (`IMESSAGE_IMAGE`, `server/imessage/` + `full-history.patch`, no libheif: the Go
+  binding doesn't build against Alpine 3.24's libheif). Chats whose import hit 429s
+  had messages in the room but not in the bridge DB → rebuilt from scratch: stop
+  bridge, delete their `message`/`tapback`/`backfill_*` rows, `portal.mxid=NULL`,
+  start; startup sync recreates the rooms. SMS and iMessage chats for one number are
+  merged via `merged_chat`, so compare counts per target guid.

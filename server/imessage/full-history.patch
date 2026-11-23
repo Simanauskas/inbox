@@ -1,0 +1,13 @@
+diff --git a/imessage/bluebubbles/api.go b/imessage/bluebubbles/api.go
+index 3d3d86f..86ab916 100644
+--- a/imessage/bluebubbles/api.go
++++ b/imessage/bluebubbles/api.go
+@@ -747,7 +747,7 @@ func (bb *blueBubbles) GetMessagesWithLimit(chatID string, limit int, backfillID
+ 		Sort: MessageQuerySortDesc,
+ 	}
+ 
+-	messages, err := bb.queryChatMessages(request, []Message{}, false)
++	messages, err := bb.queryChatMessages(request, []Message{}, true)
+ 	if err != nil {
+ 		bb.log.Error().Err(err).Interface("request", request).Str("chatID", chatID).Int("limit", limit).Str("backfillID", backfillID).Str("search", "GetMessagesWithLimit").Msg("Failed to query chat Messages")
+ 		return nil, err

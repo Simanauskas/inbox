@@ -1,0 +1,14 @@
+diff --git a/portal.go b/portal.go
+index 8afb890..7ed6206 100644
+--- a/portal.go
++++ b/portal.go
+@@ -1410,7 +1410,8 @@ func (portal *Portal) handleMatrixMediaDirect(url id.ContentURI, file *event.Enc
+ 	_, isMSC3245Voice := evt.Content.Raw["org.matrix.msc3245.voice"]
+ 
+ 	// Only convert when sending to iMessage. SMS users probably don't want CAF.
+-	if portal.Identifier.Service == "iMessage" && isMSC3245Voice && strings.HasPrefix(mimeType, "audio/") {
++	// Browsers record voice as MP4 (brand iso5/isom), which mimetype reports as video/mp4.
++	if portal.Identifier.Service == "iMessage" && isMSC3245Voice && (strings.HasPrefix(mimeType, "audio/") || mimeType == "video/mp4" || mimeType == "video/webm") {
+ 		filePath, err = ffmpeg.ConvertPath(context.TODO(), filePath, ".caf", []string{}, []string{"-c:a", "libopus"}, false)
+ 		mimeType = "audio/x-caf"
+ 		isVoiceMemo = true

@@ -411,3 +411,5 @@ li:last-child .row-main { border-bottom: 0; }
 .list > li { content-visibility: auto; contain-intrinsic-size: auto 72px; }
 /* iPhone app: leave room for the keyboard (the app itself keeps its full size behind it) */
 .app { height: calc(100% - var(--kb, 0px)); }
+/* no browser back/forward on a sideways two-finger swipe (those showed black pages) */
+html, body { overscroll-behavior-x: none; }

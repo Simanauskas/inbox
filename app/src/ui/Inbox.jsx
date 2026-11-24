@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { go } from '../router.js'
 import { previewText, normName, deliveryStatus, setArchived } from '../people.js'
 import { PEOPLE_TYPE } from '../matrix.js'
@@ -105,6 +105,38 @@ function Row({ client, i, selected }) {
   const W = 252
   const unreadNow = i.unread > 0 || i.mutedUnread > 0 || i.markedUnread
   const close = () => { setOpen(false); setDx(0) }
+
+  // Mac trackpad: a two-finger sideways swipe on a chat reveals the actions (like
+  // Telegram) instead of the browser's back/forward gesture. React's wheel handler can't
+  // cancel the browser gesture, so this listens directly, non-passively.
+  const li = useRef(null)
+  const wheel = useRef({ acc: 0, timer: null, base: 0 })
+  useEffect(() => {
+    const el = li.current
+    if (!el) return
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return // vertical: normal scrolling
+      e.preventDefault()
+      const w = wheel.current
+      if (!w.timer) { w.acc = 0; w.base = dxRef.current }
+      clearTimeout(w.timer)
+      w.acc -= e.deltaX
+      const next = Math.min(0, Math.max(-W - 40, w.base + w.acc))
+      dxRef.current = next
+      setDx(next)
+      w.timer = setTimeout(() => {
+        w.timer = null
+        const o = dxRef.current < -W / 2
+        dxRef.current = o ? -W : 0
+        setOpen(o)
+        setDx(o ? -W : 0)
+      }, 140)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+  const dxRef = useRef(0)
+  useEffect(() => { dxRef.current = dx }, [dx])
   const onTouchStart = (e) => { const p = e.touches[0]; t.current = { x: p.clientX, y: p.clientY, base: open ? -W : 0, moving: null } }
   const onTouchMove = (e) => {
     const s = t.current
@@ -137,7 +169,7 @@ function Row({ client, i, selected }) {
     await client.setAccountData(PEOPLE_TYPE, setArchived(client.accountData[PEOPLE_TYPE], i, !i.archived)).catch(() => {})
   }
   return (
-    <li className="swipe" onContextMenu={(e) => { e.preventDefault(); setOpen(true); setDx(-W) }}>
+    <li ref={li} className="swipe" onContextMenu={(e) => { e.preventDefault(); setOpen(true); setDx(-W) }}>
       <div className="swipe-actions" aria-hidden={!open}>
         <button className="swipe-btn mute" onClick={toggleMute}><Icon name={i.muted ? 'bell' : 'muted'} size={20} />{i.muted ? 'Unmute' : 'Mute'}</button>
         <button className="swipe-btn more" onClick={toggleRead}><Icon name={unreadNow ? 'check' : 'dot'} size={20} />{unreadNow ? 'Read' : 'Unread'}</button>

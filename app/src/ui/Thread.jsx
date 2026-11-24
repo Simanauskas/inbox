@@ -105,8 +105,16 @@ export default function Thread({ ctx, item }) {
     : choice.reason === 'last' ? 'last used' : ''
   const pick = (roomId) => { overrides.set(item.key, { roomId, ts: Date.now() }); setReplyTo(null); tick((x) => x + 1) }
   // two chats on the same app (e.g. two WhatsApp numbers) get a number each
-  const netCount = {}
-  for (const id of item.rooms) netCount[model.info[id]?.network] = (netCount[model.info[id]?.network] || 0) + 1
+  // One badge per app, even when someone has two chats on it (e.g. Messenger's older chat and
+  // the newer encrypted one, or WhatsApp on two numbers). The badge sends to the chat you're
+  // on, else the one with the newest message (item.rooms is newest first).
+  const targetNet = model.info[target]?.network
+  const nets = []
+  for (const id of item.rooms) {
+    const n = model.info[id]?.network
+    if (!nets.some((x) => x.n === n)) nets.push({ n, id: n === targetNet ? target : id })
+  }
+  const multiNet = nets.length > 1
 
   return (
     <div className="page thread">
@@ -118,17 +126,16 @@ export default function Thread({ ctx, item }) {
           <div className="thread-title">
             <button className="thread-name" onClick={() => go('p', item.key)}><h1>{item.name}</h1></button>
             {/* the apps this person is on: the highlighted one is where your message goes; tap another to switch */}
-            <div className="thread-sub" role={multi ? 'radiogroup' : undefined} aria-label={multi ? 'Send on' : undefined}>
-              {item.rooms.map((id, i) => {
-                const n = model.info[id]?.network
-                const name = networkInfo(n).name + (netCount[n] > 1 ? ` ${item.rooms.filter((r) => model.info[r]?.network === n).indexOf(id) + 1}` : '')
-                const on = id === target
-                return multi ? (
-                  <button key={id} role="radio" aria-checked={on} className={`ch-pick ${on ? 'on' : ''}`} style={{ '--net': networkInfo(n).color }}
+            <div className="thread-sub" role={multiNet ? 'radiogroup' : undefined} aria-label={multiNet ? 'Send on' : undefined}>
+              {nets.map(({ n, id }) => {
+                const name = networkInfo(n).name
+                const on = n === targetNet
+                return multiNet ? (
+                  <button key={n} role="radio" aria-checked={on} className={`ch-pick ${on ? 'on' : ''}`} style={{ '--net': networkInfo(n).color }}
                     onClick={() => pick(id)} aria-label={`${name}${on ? `, sending here (${why})` : ''}`} title={`${name} · ${identityOf(client, model.info, id)}${on ? ` · sending here (${why})` : ''}`}>
-                    <NetBadge net={n} />{netCount[n] > 1 && <sub>{name.split(' ').pop()}</sub>}
+                    <NetBadge net={n} />
                   </button>
-                ) : <NetBadge key={id} net={n} label />
+                ) : <NetBadge key={n} net={n} label />
               })}
               {typing.length > 0 && <i className="typing-label">typing…</i>}
             </div>

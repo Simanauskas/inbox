@@ -1,14 +1,18 @@
 diff --git a/portal.go b/portal.go
-index 8afb890..7ed6206 100644
+index 8afb890..d9d0946 100644
 --- a/portal.go
 +++ b/portal.go
-@@ -1410,7 +1410,8 @@ func (portal *Portal) handleMatrixMediaDirect(url id.ContentURI, file *event.Enc
+@@ -1410,8 +1410,11 @@ func (portal *Portal) handleMatrixMediaDirect(url id.ContentURI, file *event.Enc
  	_, isMSC3245Voice := evt.Content.Raw["org.matrix.msc3245.voice"]
  
  	// Only convert when sending to iMessage. SMS users probably don't want CAF.
 -	if portal.Identifier.Service == "iMessage" && isMSC3245Voice && strings.HasPrefix(mimeType, "audio/") {
+-		filePath, err = ffmpeg.ConvertPath(context.TODO(), filePath, ".caf", []string{}, []string{"-c:a", "libopus"}, false)
 +	// Browsers record voice as MP4 (brand iso5/isom), which mimetype reports as video/mp4.
 +	if portal.Identifier.Service == "iMessage" && isMSC3245Voice && (strings.HasPrefix(mimeType, "audio/") || mimeType == "video/mp4" || mimeType == "video/webm") {
- 		filePath, err = ffmpeg.ConvertPath(context.TODO(), filePath, ".caf", []string{}, []string{"-c:a", "libopus"}, false)
++		// sky: this ffmpeg's CAF writer can't hold Opus (or AAC), only PCM/ALAC; ALAC mono 24 kHz 16-bit
++		// is lossless, plays everywhere Apple, and is ~2 MB a minute.
++		filePath, err = ffmpeg.ConvertPath(context.TODO(), filePath, ".caf", []string{}, []string{"-ac", "1", "-ar", "24000", "-sample_fmt", "s16p", "-c:a", "alac"}, false)
  		mimeType = "audio/x-caf"
  		isVoiceMemo = true
+ 		filename = filepath.Base(filePath)

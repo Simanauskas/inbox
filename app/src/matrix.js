@@ -427,7 +427,7 @@ export class Client {
     const file = new File([blob], `Voice message.${ext}`, { type })
     const url = await this.upload(file)
     return this.send(roomId, {
-      msgtype: 'm.audio', body: 'Voice message', filename: file.name, url,
+      msgtype: 'm.audio', body: file.name, filename: file.name, url, // body = filename, or bridges send it as a separate caption text
       info: { mimetype: type === 'audio/ogg' ? 'audio/ogg; codecs=opus' : type, size: file.size, duration: Math.round(durationMs) },
       'org.matrix.msc1767.audio': { duration: Math.round(durationMs) },
       'org.matrix.msc3245.voice': {},

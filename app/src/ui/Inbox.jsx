@@ -102,7 +102,7 @@ function Row({ client, i, selected }) {
   const [dx, setDx] = useState(0)
   const [open, setOpen] = useState(false)
   const t = useRef(null)
-  const W = 168
+  const W = 252
   const unreadNow = i.unread > 0 || i.mutedUnread > 0 || i.markedUnread
   const close = () => { setOpen(false); setDx(0) }
   const onTouchStart = (e) => { const p = e.touches[0]; t.current = { x: p.clientX, y: p.clientY, base: open ? -W : 0, moving: null } }
@@ -128,6 +128,10 @@ function Row({ client, i, selected }) {
     close()
     if (unreadNow) { for (const id of i.rooms) client.markRead(id) } else client.setMarkedUnread(i.lastRoom || i.rooms[0], true)
   }
+  async function toggleMute() {
+    close()
+    for (const id of i.rooms) client.setMuted(id, !i.muted).catch(() => {})
+  }
   async function archive() {
     close()
     await client.setAccountData(PEOPLE_TYPE, setArchived(client.accountData[PEOPLE_TYPE], i, !i.archived)).catch(() => {})
@@ -135,6 +139,7 @@ function Row({ client, i, selected }) {
   return (
     <li className="swipe" onContextMenu={(e) => { e.preventDefault(); setOpen(true); setDx(-W) }}>
       <div className="swipe-actions" aria-hidden={!open}>
+        <button className="swipe-btn mute" onClick={toggleMute}><Icon name={i.muted ? 'bell' : 'muted'} size={20} />{i.muted ? 'Unmute' : 'Mute'}</button>
         <button className="swipe-btn more" onClick={toggleRead}><Icon name={unreadNow ? 'check' : 'dot'} size={20} />{unreadNow ? 'Read' : 'Unread'}</button>
         <button className="swipe-btn archive" onClick={archive}><Icon name="archive" size={20} />{i.archived ? 'Unarchive' : 'Archive'}</button>
       </div>
@@ -153,7 +158,7 @@ function Row({ client, i, selected }) {
           </div>
           <div className="row-bottom">
             <span className={`row-preview ${i.unread ? 'bold' : ''}`}>
-              {i.typing ? <i className="typing-label">typing…</i> : i.lastEvent ? <><ListTicks client={client} i={i} />{previewText(i.lastEvent, i.lastEvent.type === 'm.reaction' ? client.userId : null, client.rooms[i.lastRoom])}</> : <i>No messages yet</i>}
+              {i.typing ? <i className="typing-label">typing…</i> : i.lastEvent ? <><ListTicks client={client} i={i} />{previewText(i.lastEvent, i.lastEvent.type === 'm.reaction' ? client.userId : null, client.rooms[i.lastRoom], i.kind === 'group')}</> : <i>No messages yet</i>}
             </span>
             {i.muted && <span className="muted-icon" aria-label="Muted"><Icon name="muted" size={16} /></span>}
             {i.unread > 0 ? <span className="badge">{i.unread}</span>

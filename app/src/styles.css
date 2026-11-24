@@ -403,3 +403,11 @@ li:last-child .row-main { border-bottom: 0; }
 .update-bar { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 76px); background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 20px; box-shadow: var(--shadow); font-size: 14px; }
 .badge.quiet { background: color-mix(in srgb, var(--muted) 55%, transparent); }
 .muted-icon { color: var(--muted); display: inline-flex; flex: none; margin-right: 2px; }
+
+/* swipe actions: Mute, Read/Unread, Archive */
+.swipe-actions { width: 252px; }
+.swipe-btn.mute { background: #ff9500; }
+/* long lists: skip drawing rows that are off screen (smoother scrolling) */
+.list > li { content-visibility: auto; contain-intrinsic-size: auto 72px; }
+/* iPhone app: leave room for the keyboard (the app itself keeps its full size behind it) */
+.app { height: calc(100% - var(--kb, 0px)); }

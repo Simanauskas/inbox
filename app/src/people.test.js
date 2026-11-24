@@ -308,3 +308,17 @@ test('muted chats: unread count shown separately, not in the notifying count', a
   assert.equal(ib.unread, 1)
   assert.equal(ib.muted, false)
 })
+
+test('group reactions say who; Inbox\'s own "chat is open" rule is not a mute', async () => {
+  const { previewText, mutedRoomIds } = await import('./people.js')
+  const target = msg(ME, now - H, 'Kaip isivaizduoju')
+  const react = { event_id: '$g', type: 'm.reaction', sender: '@whatsapp_7:x', origin_server_ts: now, content: { 'm.relates_to': { event_id: target.event_id, key: '❤️' } } }
+  const g = { byId: { [target.event_id]: target }, timeline: [target, react], members: { '@whatsapp_7:x': { displayname: 'Laura (WA)' } } }
+  assert.equal(previewText(react, ME, g, true), 'Laura reacted ❤️ to "Kaip isivaizduoju"')
+  assert.equal(previewText(react, ME, g, false), 'Reacted ❤️ to "Kaip isivaizduoju"')
+  const ad = { 'm.push_rules': { global: { override: [
+    { rule_id: 'inbox-open-!a', actions: [], conditions: [{ kind: 'event_match', key: 'room_id', pattern: '!a' }] },
+    { rule_id: 'mute-b', actions: [], conditions: [{ kind: 'event_match', key: 'room_id', pattern: '!b' }] },
+  ] } } }
+  assert.deepEqual([...mutedRoomIds(ad)], ['!b'])
+})

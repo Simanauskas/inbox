@@ -70,7 +70,10 @@ export async function initNative() {
     const { Keyboard } = await import('@capacitor/keyboard')
     await Keyboard.setAccessoryBarVisible({ isVisible: false })
     // while the keyboard is up there's no home bar to leave room for
-    Keyboard.addListener('keyboardWillShow', () => document.documentElement.classList.add('kb-open'))
-    Keyboard.addListener('keyboardWillHide', () => document.documentElement.classList.remove('kb-open'))
+    // The app keeps its full size behind the keyboard (resizing the native view lagged and
+    // showed black around the keyboard); the layout just leaves room for it.
+    const root = document.documentElement
+    Keyboard.addListener('keyboardWillShow', ({ keyboardHeight }) => { root.style.setProperty('--kb', `${keyboardHeight}px`); root.classList.add('kb-open') })
+    Keyboard.addListener('keyboardWillHide', () => { root.style.setProperty('--kb', '0px'); root.classList.remove('kb-open') })
   } catch {}
 }

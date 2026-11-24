@@ -115,7 +115,8 @@ export function mutedRoomIds(accountData) {
   const ids = new Set((g.room || []).filter(quiet).map((r) => r.rule_id))
   for (const r of g.override || []) {
     const c = r.conditions || []
-    if (quiet(r) && c.length === 1 && c[0].kind === 'event_match' && c[0].key === 'room_id') ids.add(c[0].pattern)
+    // inbox-open-…: Inbox's own temporary "chat is open" rule, not a real mute
+    if (quiet(r) && !r.rule_id?.startsWith('inbox-open-') && c.length === 1 && c[0].kind === 'event_match' && c[0].key === 'room_id') ids.add(c[0].pattern)
   }
   return ids
 }
@@ -489,13 +490,14 @@ function applyEdits(ev, { edits }) {
   return { ...ev, content: { ...ed.content['m.new_content'], 'm.relates_to': ev.content['m.relates_to'] }, edited: true }
 }
 
-export function previewText(ev, me, room = null) {
+export function previewText(ev, me, room = null, group = false) {
   if (!ev) return ''
   if (ev.type === 'm.reaction') {
     const rel = ev.content?.['m.relates_to'] || {}
     const target = room?.byId?.[rel.event_id] || room?.timeline?.find((e) => e.event_id === rel.event_id)
     const quoted = target ? previewText(target, null).replace(/\s+/g, ' ').slice(0, 80) : ''
-    const who = ev.sender === me ? 'You reacted' : 'Reacted'
+    const name = cleanName(room?.members?.[ev.sender]?.displayname || '')
+    const who = ev.sender === me ? 'You reacted' : group && name ? `${name} reacted` : 'Reacted'
     return quoted ? `${who} ${rel.key} to "${quoted}"` : `${who} ${rel.key}`
   }
   const you = ev.sender === me ? 'You: ' : ''

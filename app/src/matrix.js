@@ -446,6 +446,18 @@ export class Client {
       on ? { typing: true, timeout: 6000 } : { typing: false }).catch(() => {})
   }
 
+  // Mute a chat in Inbox (no notifications, grey unread count): a room push rule that
+  // doesn't notify, the same kind the bridges create for chats muted on the phone.
+  async setMuted(roomId, muted) {
+    const path = `/_matrix/client/v3/pushrules/global/room/${enc(roomId)}`
+    if (muted) await this.api('PUT', path, { actions: [] })
+    else await this.api('DELETE', path).catch(() => {})
+    const g = (this.accountData['m.push_rules'] ||= { global: {} }).global
+    g.room = (g.room || []).filter((r) => r.rule_id !== roomId)
+    if (muted) g.room.push({ rule_id: roomId, actions: [], enabled: true, default: false })
+    this.emit()
+  }
+
   // "Mark as unread" (a dot on the chat until you open it); the bridges pass it on
   // to WhatsApp / Messenger where they can.
   async setMarkedUnread(roomId, unread) {

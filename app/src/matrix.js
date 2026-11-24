@@ -73,6 +73,7 @@ function newRoom(id) {
     receipts: {}, // userId -> eventId (m.read)
     fullyRead: null,
     markedUnread: false, // you marked it unread (m.marked_unread)
+    unreadCount: 0, // unread messages, muted chats included (server count)
     typing: [],
     createTs: 0,
   }
@@ -197,7 +198,7 @@ export class Client {
       const cut = events.length > CACHE_EVENTS_PER_ROOM
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
-        heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount,
+        heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount, unreadCount: room.unreadCount || 0,
         receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, createTs: room.createTs, roomType: room.roomType || null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
@@ -236,6 +237,8 @@ export class Client {
         if (isNew && !initial && ev.sender !== this.userId && isMessage(ev)) this.onMessage?.(room, ev)
       }
       if (r.unread_notifications) room.notificationCount = r.unread_notifications.notification_count || 0
+      // unread messages including muted chats (MSC2654; on sky since 24 Nov 2026)
+      if (r['org.matrix.msc2654.unread_count'] !== undefined) room.unreadCount = r['org.matrix.msc2654.unread_count'] || 0
       for (const ev of r.ephemeral?.events || []) {
         if (ev.type === 'm.typing') room.typing = ev.content.user_ids || []
         if (ev.type === 'm.receipt') {
@@ -460,6 +463,7 @@ export class Client {
     if (!last || (room.receipts[this.userId] === last.event_id && !room.notificationCount)) return
     room.receipts[this.userId] = last.event_id
     room.notificationCount = 0
+    room.unreadCount = 0
     this.emit()
     this.onRead?.(roomId)
     await this.api('POST', `/_matrix/client/v3/rooms/${enc(roomId)}/read_markers`, {

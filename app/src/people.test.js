@@ -288,3 +288,23 @@ test('chat list: reactions show as "Reacted 👍 to …" and archived chats come
   r.wa.timeline = [...r.wa.timeline, msg('@whatsapp_1:x', Date.now() + 1000)]
   assert.equal(buildModel(r, {}, ME, cfg).items[0].archived, false)
 })
+
+test('muted chats: unread count shown separately, not in the notifying count', async () => {
+  const { mutedRoomIds } = await import('./people.js')
+  const a = room('a', 'whatsapp', '@whatsapp_1:x', 'Eiguliu 5', [msg(ME, now - 3 * H), msg('@whatsapp_1:x', now - 2 * H), msg('@whatsapp_1:x', now - H)])
+  a.receipts = { [ME]: a.timeline[0].event_id }
+  const b = room('b', 'whatsapp', '@whatsapp_2:x', 'Rokas', [msg('@whatsapp_2:x', now)])
+  b.notificationCount = 1
+  const accountData = { 'm.push_rules': { global: { room: [{ rule_id: 'a', actions: [], enabled: true }] } } }
+  assert.deepEqual([...mutedRoomIds(accountData)], ['a'])
+  const m = buildModel({ a, b }, accountData, ME, null)
+  const ia = m.items.find((i) => i.rooms.includes('a'))
+  const ib = m.items.find((i) => i.rooms.includes('b'))
+  assert.equal(ia.muted, true)
+  assert.equal(ia.unread, 0, 'muted chats never count towards notifications / the app badge')
+  assert.equal(ia.mutedUnread, 2, 'but their unread messages are counted for the grey bubble')
+  a.unreadCount = 16
+  assert.equal(buildModel({ a, b }, accountData, ME, null).items.find((i) => i.rooms.includes('a')).mutedUnread, 16, "the server's count wins when higher")
+  assert.equal(ib.unread, 1)
+  assert.equal(ib.muted, false)
+})

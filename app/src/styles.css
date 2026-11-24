@@ -401,3 +401,5 @@ li:last-child .row-main { border-bottom: 0; }
 .archived-row .archived-count { margin-left: auto; font-size: 14px; }
 .badge.dot { min-width: 12px; width: 12px; height: 12px; padding: 0; }
 .update-bar { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 76px); background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 20px; box-shadow: var(--shadow); font-size: 14px; }
+.badge.quiet { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.muted-icon { color: var(--muted); display: inline-flex; flex: none; margin-right: 2px; }

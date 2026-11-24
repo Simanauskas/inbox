@@ -19,7 +19,7 @@ export default function Inbox({ ctx, selected }) {
     const nq = normName(q)
     return model.items.filter((i) => {
       if (filter === 'archived') { if (!i.archived) return false } else if (i.archived && !nq) return false
-      if (filter === 'unread' && !i.unread && !i.markedUnread) return false
+      if (filter === 'unread' && !i.unread && !i.mutedUnread && !i.markedUnread) return false
       if (filter === 'groups' && i.kind !== 'group') return false
       if (!['all', 'unread', 'groups', 'archived'].includes(filter) && !i.networks.includes(filter) && !(filter === 'imessage' && i.networks.includes('sms'))) return false
       return !nq || normName(i.name).includes(nq)
@@ -28,10 +28,10 @@ export default function Inbox({ ctx, selected }) {
   // Bridges create a room for every contact/thread they find, even with no
   // messages (e.g. encrypted Messenger chats without restored history). Keep
   // those out of the way until something is said in them.
-  const active = items.filter((i) => i.lastEvent || i.typing || i.unread > 0)
+  const active = items.filter((i) => i.lastEvent || i.typing || i.unread > 0 || i.mutedUnread > 0)
   const filtered = q || filter !== 'all'
   const home = () => { setQ(''); setFilter('all'); setShowEmpty(false); document.querySelector('.inbox .list')?.scrollTo({ top: 0, behavior: 'smooth' }) }
-  const empty = items.filter((i) => !i.lastEvent && !i.typing && !i.unread) // unread chats always stay visible
+  const empty = items.filter((i) => !i.lastEvent && !i.typing && !i.unread && !i.mutedUnread) // unread chats always stay visible
 
   return (
     <div className="page inbox">
@@ -103,7 +103,7 @@ function Row({ client, i, selected }) {
   const [open, setOpen] = useState(false)
   const t = useRef(null)
   const W = 168
-  const unreadNow = i.unread > 0 || i.markedUnread
+  const unreadNow = i.unread > 0 || i.mutedUnread > 0 || i.markedUnread
   const close = () => { setOpen(false); setDx(0) }
   const onTouchStart = (e) => { const p = e.touches[0]; t.current = { x: p.clientX, y: p.clientY, base: open ? -W : 0, moving: null } }
   const onTouchMove = (e) => {
@@ -155,7 +155,10 @@ function Row({ client, i, selected }) {
             <span className={`row-preview ${i.unread ? 'bold' : ''}`}>
               {i.typing ? <i className="typing-label">typing…</i> : i.lastEvent ? <><ListTicks client={client} i={i} />{previewText(i.lastEvent, i.lastEvent.type === 'm.reaction' ? client.userId : null, client.rooms[i.lastRoom])}</> : <i>No messages yet</i>}
             </span>
-            {i.unread > 0 ? <span className="badge">{i.unread}</span> : i.markedUnread ? <span className="badge dot" aria-label="Marked unread" /> : null}
+            {i.muted && <span className="muted-icon" aria-label="Muted"><Icon name="muted" size={16} /></span>}
+            {i.unread > 0 ? <span className="badge">{i.unread}</span>
+              : i.mutedUnread > 0 ? <span className="badge quiet" aria-label={`${i.mutedUnread} unread, muted`}>{i.mutedUnread}</span>
+                : i.markedUnread ? <span className="badge dot" aria-label="Marked unread" /> : null}
           </div>
         </div>
       </button>

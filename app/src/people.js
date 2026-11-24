@@ -107,6 +107,32 @@ export function unreadCount(room) {
   return room.notificationCount || 0
 }
 
+// Chats you muted (on WhatsApp etc., or here): a room push rule that doesn't notify,
+// or an override rule for just that room.
+export function mutedRoomIds(accountData) {
+  const g = accountData?.['m.push_rules']?.global || {}
+  const quiet = (r) => r.enabled !== false && !(r.actions || []).includes('notify')
+  const ids = new Set((g.room || []).filter(quiet).map((r) => r.rule_id))
+  for (const r of g.override || []) {
+    const c = r.conditions || []
+    if (quiet(r) && c.length === 1 && c[0].kind === 'event_match' && c[0].key === 'room_id') ids.add(c[0].pattern)
+  }
+  return ids
+}
+
+// Unread messages in a muted chat (they don't notify, so the server's notification count
+// stays 0): the server's unread count, or the messages loaded since your read receipt.
+export function mutedUnreadCount(room, me) {
+  let local = 0
+  const receipt = room.receipts?.[me]
+  const idx = receipt ? room.timeline.findIndex((e) => e.event_id === receipt) : -1
+  if (idx >= 0) for (let i = idx + 1; i < room.timeline.length; i++) {
+    const e = room.timeline[i]
+    if (e.sender !== me && isDisplayable(e)) local++
+  }
+  return Math.max(room.unreadCount || 0, local)
+}
+
 export function normName(s) {
   return cleanName(s || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -122,6 +148,7 @@ export function normName(s) {
 export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null) {
   const config = normConfig(rawConfig)
   const direct = directRoomIds(accountData)
+  const muted = mutedRoomIds(accountData)
   const info = {} // roomId -> { kind, network, title, remote, phone, lastTs }
   for (const room of Object.values(rooms)) {
     if (room.membership !== 'join') continue
@@ -134,6 +161,7 @@ export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null)
     info[room.id] = {
       kind, network: networkOf(room), title, remote, phone, email, lastTs: lastActivity(room),
       contact: cm?.contact || null, contactBy: cm?.by || null,
+      muted: muted.has(room.id),
     }
   }
 
@@ -181,18 +209,22 @@ function makeItem(key, kind, name, roomIds, rooms, info, me, extra = {}) {
   let avatarUrl = null
   let typing = false
   let markedUnread = false
+  let mutedUnread = 0
+  let allMuted = roomIds.length > 0
   for (const id of roomIds) {
     const r = rooms[id]
     if (r.markedUnread) markedUnread = true
+    if (!info[id].muted) allMuted = false
     const m = lastActivityEvent(r)
     if (m && (!last || m.origin_server_ts > last.origin_server_ts)) { last = m; lastRoom = id }
-    unread += unreadCount(r, me)
+    if (info[id].muted) mutedUnread += mutedUnreadCount(r, me)
+    else unread += unreadCount(r, me)
     if (!avatarUrl && r.avatarUrl) avatarUrl = r.avatarUrl
     if ((r.typing || []).some((u) => u !== me)) typing = true
   }
   const sorted = [...roomIds].sort((a, b) => info[b].lastTs - info[a].lastTs)
   return {
-    key, kind, name, rooms: sorted, lastEvent: last, lastRoom, unread, markedUnread, avatarUrl, typing,
+    key, kind, name, rooms: sorted, lastEvent: last, lastRoom, unread, mutedUnread, muted: allMuted, markedUnread, avatarUrl, typing,
     lastTs: last ? last.origin_server_ts : Math.max(0, ...roomIds.map((id) => info[id].lastTs)),
     networks: [...new Set(sorted.map((id) => info[id].network))],
     personId: null, defaultRoom: null, ...extra,

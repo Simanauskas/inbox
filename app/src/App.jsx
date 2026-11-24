@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react'
 import { Client, PEOPLE_TYPE } from './matrix.js'
-import { lockEnabled, unlock, onResume } from './native.js'
+import { lockEnabled, unlock, onResume, isNative } from './native.js'
 import { buildModel, suggestions, previewText, autoMerges, applyAutoMerges } from './people.js'
 import { networkInfo } from './networks.js'
 import Login from './ui/Login.jsx'
@@ -121,6 +121,7 @@ function Main({ session, onLogout }) {
   const route = useHashRoute()
   const [wide, setWide] = useState(() => matchMedia('(min-width: 900px)').matches)
   useEdgeSwipeBack(!!route.view && route.view !== 'inbox' && !wide)
+  const updateReady = useUpdateCheck()
 
   useEffect(() => {
     const mq = matchMedia('(min-width: 900px)')
@@ -219,15 +220,17 @@ function Main({ session, onLogout }) {
   else if (route.view === 'search') page = <Search ctx={ctx} />
   else if ((route.view === 't' || route.view === 'p') && !client.synced) page = <div className="empty-pane"><div className="spinner" /></div>
 
+  const updateBar = updateReady && <button className="update-bar" onClick={() => location.reload()}>A new version of Inbox is ready. <b>Update</b></button>
   if (wide) {
     return (
       <div className="app split">
+        {updateBar}
         <aside className="list-pane"><Inbox ctx={ctx} selected={item?.key} /></aside>
         <main className="detail-pane">{page || <div className="empty-pane"><p>Pick a conversation</p></div>}</main>
       </div>
     )
   }
-  return <div className="app">{page || <Inbox ctx={ctx} />}</div>
+  return <div className="app">{updateBar}{page || <Inbox ctx={ctx} />}</div>
 }
 
 // Swipe in from the left edge to go back, like native iPhone apps (the Home Screen
@@ -286,4 +289,32 @@ function useEdgeSwipeBack(enabled) {
       document.removeEventListener('touchcancel', onEnd)
     }
   }, [enabled])
+}
+
+// The web app (Mac Dock / Home Screen) can stay open for days without reloading, so it
+// would keep running an old version. Look for a newer build when the app comes back into
+// view (at most every 10 minutes) and offer a one-tap reload. (The iPhone app updates
+// through TestFlight instead.)
+function useUpdateCheck() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (isNative || !import.meta.env.PROD) return
+    const mine = () => [...document.scripts].map((s) => s.src).find((s) => /\/assets\/index-[^/]+\.js$/.test(s))
+    let last = 0
+    const check = async () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 600_000) return
+      last = Date.now()
+      try {
+        const html = await (await fetch('/', { cache: 'no-store' })).text()
+        const latest = /\/assets\/index-[^"']+\.js/.exec(html)?.[0]
+        const current = mine()
+        if (latest && current && !current.endsWith(latest)) setReady(true)
+      } catch {}
+    }
+    check()
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    return () => { document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check) }
+  }, [])
+  return ready
 }

@@ -9,7 +9,7 @@ const filter = (limit) => ({
     timeline: { limit },
     state: { lazy_load_members: true },
     ephemeral: { types: ['m.receipt', 'm.typing'] },
-    account_data: { types: ['m.fully_read'] },
+    account_data: { types: ['m.fully_read', 'm.marked_unread', 'com.famedly.marked_unread'] },
   },
   presence: { not_types: ['*'] },
 })
@@ -72,6 +72,7 @@ function newRoom(id) {
     notificationCount: 0,
     receipts: {}, // userId -> eventId (m.read)
     fullyRead: null,
+    markedUnread: false, // you marked it unread (m.marked_unread)
     typing: [],
     createTs: 0,
   }
@@ -197,7 +198,7 @@ export class Client {
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
         heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount,
-        receipts: room.receipts, fullyRead: room.fullyRead, createTs: room.createTs, roomType: room.roomType || null,
+        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, createTs: room.createTs, roomType: room.roomType || null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
         // without one, the next "load older" starts from the newest and skips what it has
@@ -243,7 +244,10 @@ export class Client {
           }
         }
       }
-      for (const ev of r.account_data?.events || []) if (ev.type === 'm.fully_read') room.fullyRead = ev.content.event_id
+      for (const ev of r.account_data?.events || []) {
+        if (ev.type === 'm.fully_read') room.fullyRead = ev.content.event_id
+        if (ev.type === 'm.marked_unread' || ev.type === 'com.famedly.marked_unread') room.markedUnread = !!ev.content?.unread
+      }
     }
     // This is your own server and only the bridges can invite you, so accept every invite.
     for (const id of Object.keys(res.rooms?.invite || {})) {
@@ -439,9 +443,20 @@ export class Client {
       on ? { typing: true, timeout: 6000 } : { typing: false }).catch(() => {})
   }
 
+  // "Mark as unread" (a dot on the chat until you open it); the bridges pass it on
+  // to WhatsApp / Messenger where they can.
+  async setMarkedUnread(roomId, unread) {
+    const room = this.rooms[roomId]
+    if (!room) return
+    room.markedUnread = unread
+    this.emit()
+    await this.api('PUT', `/_matrix/client/v3/user/${enc(this.userId)}/rooms/${enc(roomId)}/account_data/m.marked_unread`, { unread }).catch(() => {})
+  }
+
   async markRead(roomId) {
     const room = this.rooms[roomId]
     const last = [...(room?.timeline || [])].reverse().find((e) => !e.local)
+    if (room?.markedUnread) this.setMarkedUnread(roomId, false)
     if (!last || (room.receipts[this.userId] === last.event_id && !room.notificationCount)) return
     room.receipts[this.userId] = last.event_id
     room.notificationCount = 0

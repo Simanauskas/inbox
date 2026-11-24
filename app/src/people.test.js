@@ -270,3 +270,21 @@ test('call hand-off: WhatsApp, FaceTime, phone and Messenger links', async () =>
   assert.deepEqual(callOptions({ rooms: ['ime'] }, info).map((x) => x.href), ['facetime://jonas@example.com'])
   assert.deepEqual(callOptions({ rooms: ['x'] }, { x: { network: 'telegram' } }), [])
 })
+
+test('chat list: reactions show as "Reacted 👍 to …" and archived chats come back on new activity', async () => {
+  const { previewText, setArchived } = await import('./people.js')
+  const target = msg(ME, now - 2 * H, 'yeah these are the domains')
+  const react = { event_id: '$r', type: 'm.reaction', sender: '@whatsapp_1:x', origin_server_ts: now - H, content: { 'm.relates_to': { rel_type: 'm.annotation', event_id: target.event_id, key: '👍' } } }
+  const r = { wa: room('wa', 'whatsapp', '@whatsapp_1:x', 'Michael', [target, react]) }
+  r.wa.byId = { [target.event_id]: target, $r: react }
+  const m = buildModel(r, {}, ME, null)
+  const it = m.items[0]
+  assert.equal(it.lastEvent.type, 'm.reaction', 'a reaction moves the chat up')
+  assert.equal(previewText(it.lastEvent, ME, r.wa), 'Reacted 👍 to "yeah these are the domains"')
+  assert.equal(previewText({ ...react, sender: ME }, ME, r.wa), 'You reacted 👍 to "yeah these are the domains"')
+  // archive, then a new message brings it back
+  const cfg = setArchived(null, it, true)
+  assert.equal(buildModel(r, {}, ME, cfg).items[0].archived, true)
+  r.wa.timeline = [...r.wa.timeline, msg('@whatsapp_1:x', Date.now() + 1000)]
+  assert.equal(buildModel(r, {}, ME, cfg).items[0].archived, false)
+})

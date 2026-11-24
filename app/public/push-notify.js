@@ -13,6 +13,10 @@
   function bodyOf(p) {
     const c = p.content || {}
     if (p.type === 'm.room.member') return c.membership === 'invite' ? 'New chat' : ''
+    if (p.type === 'm.reaction') {
+      const key = (c['m.relates_to'] || {}).key
+      return key ? 'Reacted ' + key + ' to your message' : 'Reacted to your message'
+    }
     if (p.type === 'm.sticker') return 'Sticker'
     if (p.type === 'm.room.encrypted') return 'New message'
     switch (c.msgtype) {

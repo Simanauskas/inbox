@@ -389,3 +389,15 @@ li:last-child .row-main { border-bottom: 0; }
 .sheet { overflow-y: auto; }
 .call-sheet { max-height: calc(100vh - env(safe-area-inset-top) - 24px); }
 .kb-open .composer { padding-bottom: 6px; }
+
+/* chat list: swipe actions (Read/Unread, Archive) and the Archived row */
+.swipe { position: relative; overflow: hidden; }
+.swipe-front { position: relative; background: var(--bg); z-index: 1; touch-action: pan-y; }
+.swipe-actions { position: absolute; inset: 0 0 0 auto; width: 168px; display: flex; }
+.swipe-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #fff; font-size: 13px; font-weight: 600; }
+.swipe-btn.more { background: #8e8e93; }
+.swipe-btn.archive { background: #25a244; }
+.archived-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 22px; color: var(--muted); font-size: 16px; text-align: left; }
+.archived-row .archived-count { margin-left: auto; font-size: 14px; }
+.badge.dot { min-width: 12px; width: 12px; height: 12px; padding: 0; }
+.update-bar { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 76px); background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 20px; box-shadow: var(--shadow); font-size: 14px; }

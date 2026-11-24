@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { go } from '../router.js'
-import { previewText, normName, deliveryStatus } from '../people.js'
+import { previewText, normName, deliveryStatus, setArchived } from '../people.js'
+import { PEOPLE_TYPE } from '../matrix.js'
 import { TICKS, TICK_TITLE } from './Thread.jsx'
 import { Avatar, NetBadge, TopBar, Icon, timeShort } from './common.jsx'
 import { networkInfo } from '../networks.js'
@@ -12,13 +13,15 @@ export default function Inbox({ ctx, selected }) {
   const [showEmpty, setShowEmpty] = useState(false)
 
   // SMS chats are under the iM filter, so the filter row stays on one line
+  const archivedCount = useMemo(() => model.items.filter((i) => i.archived).length, [model])
   const nets = useMemo(() => [...new Set(model.items.flatMap((i) => i.networks.map((n) => (n === 'sms' ? 'imessage' : n))))], [model])
   const items = useMemo(() => {
     const nq = normName(q)
     return model.items.filter((i) => {
-      if (filter === 'unread' && !i.unread) return false
+      if (filter === 'archived') { if (!i.archived) return false } else if (i.archived && !nq) return false
+      if (filter === 'unread' && !i.unread && !i.markedUnread) return false
       if (filter === 'groups' && i.kind !== 'group') return false
-      if (!['all', 'unread', 'groups'].includes(filter) && !i.networks.includes(filter) && !(filter === 'imessage' && i.networks.includes('sms'))) return false
+      if (!['all', 'unread', 'groups', 'archived'].includes(filter) && !i.networks.includes(filter) && !(filter === 'imessage' && i.networks.includes('sms'))) return false
       return !nq || normName(i.name).includes(nq)
     })
   }, [model, q, filter])
@@ -63,6 +66,12 @@ export default function Inbox({ ctx, selected }) {
         </button>
       )}
       <ul className="list">
+        {filter === 'archived' && (
+          <li><button className="archived-row" onClick={() => setFilter('all')}><Icon name="back" size={18} /> <b>Archived</b><span className="muted"> · back to all chats</span></button></li>
+        )}
+        {filter === 'all' && !q && archivedCount > 0 && (
+          <li><button className="archived-row" onClick={() => setFilter('archived')}><Icon name="archive" size={20} /> <span>Archived</span><span className="archived-count">{archivedCount}</span></button></li>
+        )}
         {active.map((i) => <Row key={i.key} client={client} i={i} selected={selected} />)}
         {client.synced && empty.length > 0 && (
           <li>
@@ -89,13 +98,53 @@ export default function Inbox({ ctx, selected }) {
 }
 
 function Row({ client, i, selected }) {
+  // swipe left (or right-click on the Mac) for Read/Unread and Archive, like WhatsApp
+  const [dx, setDx] = useState(0)
+  const [open, setOpen] = useState(false)
+  const t = useRef(null)
+  const W = 168
+  const unreadNow = i.unread > 0 || i.markedUnread
+  const close = () => { setOpen(false); setDx(0) }
+  const onTouchStart = (e) => { const p = e.touches[0]; t.current = { x: p.clientX, y: p.clientY, base: open ? -W : 0, moving: null } }
+  const onTouchMove = (e) => {
+    const s = t.current
+    if (!s) return
+    const p = e.touches[0]
+    const mx = p.clientX - s.x
+    const my = p.clientY - s.y
+    if (s.moving === null) { if (Math.abs(mx) < 8 && Math.abs(my) < 8) return; s.moving = Math.abs(mx) > Math.abs(my) }
+    if (!s.moving) return
+    setDx(Math.min(0, Math.max(-W - 40, s.base + mx)))
+  }
+  const onTouchEnd = () => {
+    const s = t.current
+    t.current = null
+    if (!s?.moving) return
+    const o = dx < -W / 2
+    setOpen(o)
+    setDx(o ? -W : 0)
+  }
+  async function toggleRead() {
+    close()
+    if (unreadNow) { for (const id of i.rooms) client.markRead(id) } else client.setMarkedUnread(i.lastRoom || i.rooms[0], true)
+  }
+  async function archive() {
+    close()
+    await client.setAccountData(PEOPLE_TYPE, setArchived(client.accountData[PEOPLE_TYPE], i, !i.archived)).catch(() => {})
+  }
   return (
-    <li>
+    <li className="swipe" onContextMenu={(e) => { e.preventDefault(); setOpen(true); setDx(-W) }}>
+      <div className="swipe-actions" aria-hidden={!open}>
+        <button className="swipe-btn more" onClick={toggleRead}><Icon name={unreadNow ? 'check' : 'dot'} size={20} />{unreadNow ? 'Read' : 'Unread'}</button>
+        <button className="swipe-btn archive" onClick={archive}><Icon name="archive" size={20} />{i.archived ? 'Unarchive' : 'Archive'}</button>
+      </div>
+      <div className="swipe-front" style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: t.current ? 'none' : 'transform 0.2s ease-out' }}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onClickCapture={(e) => { if (open) { e.stopPropagation(); e.preventDefault(); close() } }}>
       <button className={`row ${selected === i.key ? 'selected' : ''}`} onClick={() => go('t', i.key)}>
         <Avatar client={client} mxc={i.avatarUrl} name={i.name} />
         <div className="row-main">
           <div className="row-top">
-            <span className={`row-name ${i.unread ? 'bold' : ''}`}>{i.name}</span>
+            <span className={`row-name ${i.unread || i.markedUnread ? 'bold' : ''}`}>{i.name}</span>
             <span className="nets" title={i.networks.map((n) => networkInfo(n).name).join(', ')}>
               {i.networks.slice(0, i.networks.length > 2 ? 1 : 2).map((n) => <NetBadge key={n} net={n} />)}
               {i.networks.length > 2 && <span className="net more">+{i.networks.length - 1}</span>}
@@ -104,12 +153,13 @@ function Row({ client, i, selected }) {
           </div>
           <div className="row-bottom">
             <span className={`row-preview ${i.unread ? 'bold' : ''}`}>
-              {i.typing ? <i className="typing-label">typing…</i> : i.lastEvent ? <><ListTicks client={client} i={i} />{previewText(i.lastEvent, null)}</> : <i>No messages yet</i>}
+              {i.typing ? <i className="typing-label">typing…</i> : i.lastEvent ? <><ListTicks client={client} i={i} />{previewText(i.lastEvent, i.lastEvent.type === 'm.reaction' ? client.userId : null, client.rooms[i.lastRoom])}</> : <i>No messages yet</i>}
             </span>
-            {i.unread > 0 && <span className="badge">{i.unread}</span>}
+            {i.unread > 0 ? <span className="badge">{i.unread}</span> : i.markedUnread ? <span className="badge dot" aria-label="Marked unread" /> : null}
           </div>
         </div>
       </button>
+      </div>
     </li>
   )
 }
@@ -122,7 +172,7 @@ function StatusLine({ client }) {
 // ✓ / ✓✓ / blue ✓✓ before the preview when the last message is yours
 function ListTicks({ client, i }) {
   const me = client.userId
-  if (i.lastEvent?.sender !== me) return null
+  if (i.lastEvent?.sender !== me || i.lastEvent.type === 'm.reaction') return null
   const status = deliveryStatus(client.rooms[i.lastRoom], i.lastEvent, me)
   if (!status || status === 'failed') return null
   return <span className={`list-ticks ${status}`} title={TICK_TITLE[status]}>{TICKS[status]} </span>

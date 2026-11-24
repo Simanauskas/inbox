@@ -219,3 +219,14 @@ Privacy), service worker/web push off inside the app. Call button in the chat he
 the web): no bridge carries calls, so it hands off to wa.me / facetime(-audio):// / tel: / fb-messenger://.
 Planned: stage 2 native push (APNs key → Sygnal on sky, @capacitor/push-notifications), stage 3 recent-photos
 grid. "Default messaging app" (EU managed entitlement) deliberately not requested.
+
+### Chat list extras (24 Nov 2026)
+- Reactions: the list preview shows `Reacted 👍 to "…"` / `You reacted ❤️ to "…"` (`lastActivityEvent`,
+  `previewText(ev, me, room)`), and reactions notify: on sky, @s's push rules have `.m.rule.reaction`
+  disabled and an underride `fit.simas.inbox.reaction` (type m.reaction → notify), so muted chats
+  (room rules) stay silent. Push text: "Reacted 👍 to your message" (push-notify.js).
+- Swipe a chat left (right-click on the Mac): Read/Unread (`m.marked_unread` room account data,
+  `client.setMarkedUnread`) and Archive (`config.archived[itemKey] = ts`; back in the inbox when
+  lastTs > ts). "Archived (N)" row at the top of the list.
+- Web app update check (`useUpdateCheck`): compares /assets/index-*.js of the live page with the
+  loaded one on focus (max every 10 min) and shows "A new version of Inbox is ready. Update".

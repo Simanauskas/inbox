@@ -3,10 +3,10 @@
 import { networkOf, isBotUser, phoneFromUser, emailFromUser } from './networks.js'
 import { contactMatch } from './contacts.js'
 
-export const DEFAULT_CONFIG = { version: 1, people: {}, dismissed: [], replyWindowHours: 12 }
+export const DEFAULT_CONFIG = { version: 1, people: {}, dismissed: [], replyWindowHours: 12, archived: {} }
 
 export function normConfig(c) {
-  return { ...DEFAULT_CONFIG, ...(c || {}), people: { ...((c && c.people) || {}) }, dismissed: [...((c && c.dismissed) || [])], unlinked: [...((c && c.unlinked) || [])] }
+  return { ...DEFAULT_CONFIG, ...(c || {}), people: { ...((c && c.people) || {}) }, dismissed: [...((c && c.dismissed) || [])], unlinked: [...((c && c.unlinked) || [])], archived: { ...((c && c.archived) || {}) } }
 }
 
 export function isDisplayable(ev) {
@@ -73,6 +73,21 @@ export function roomTitle(room, me) {
   if (room.name) return cleanName(room.name)
   const u = remoteUser(room, me) || otherMembers(room, me)[0]
   return cleanName((u && room.members[u]?.displayname) || u || 'Chat')
+}
+
+// A reaction someone added (not removed / redacted), for the chat list: WhatsApp-style
+// "Reacted 👍 to "…"" previews, and the chat moves up when someone reacts.
+export function isListReaction(ev) {
+  return ev.type === 'm.reaction' && !ev.redacted && !ev.unsigned?.redacted_because && !!ev.content?.['m.relates_to']?.key
+}
+
+// the newest message or reaction in a room
+export function lastActivityEvent(room) {
+  for (let i = room.timeline.length - 1; i >= 0; i--) {
+    const e = room.timeline[i]
+    if (isDisplayable(e) || isListReaction(e)) return e
+  }
+  return null
 }
 
 export function lastMessage(room) {
@@ -147,7 +162,16 @@ export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null)
       { contact: i.contact, nameSource: i.contact ? 'contacts' : 'app' }))
   }
   items.sort((a, b) => b.lastTs - a.lastTs)
+  // archived until something new happens in the chat (then it's back in the inbox)
+  for (const i of items) i.archived = !!config.archived[i.key] && config.archived[i.key] >= (i.lastTs || 0)
   return { items, connections, info, config, owner }
+}
+
+export function setArchived(rawConfig, item, on) {
+  const c = normConfig(rawConfig)
+  if (on) c.archived[item.key] = Math.max(Date.now(), item.lastTs || 0)
+  else delete c.archived[item.key]
+  return c
 }
 
 function makeItem(key, kind, name, roomIds, rooms, info, me, extra = {}) {
@@ -156,9 +180,11 @@ function makeItem(key, kind, name, roomIds, rooms, info, me, extra = {}) {
   let unread = 0
   let avatarUrl = null
   let typing = false
+  let markedUnread = false
   for (const id of roomIds) {
     const r = rooms[id]
-    const m = lastMessage(r)
+    if (r.markedUnread) markedUnread = true
+    const m = lastActivityEvent(r)
     if (m && (!last || m.origin_server_ts > last.origin_server_ts)) { last = m; lastRoom = id }
     unread += unreadCount(r, me)
     if (!avatarUrl && r.avatarUrl) avatarUrl = r.avatarUrl
@@ -166,7 +192,7 @@ function makeItem(key, kind, name, roomIds, rooms, info, me, extra = {}) {
   }
   const sorted = [...roomIds].sort((a, b) => info[b].lastTs - info[a].lastTs)
   return {
-    key, kind, name, rooms: sorted, lastEvent: last, lastRoom, unread, avatarUrl, typing,
+    key, kind, name, rooms: sorted, lastEvent: last, lastRoom, unread, markedUnread, avatarUrl, typing,
     lastTs: last ? last.origin_server_ts : Math.max(0, ...roomIds.map((id) => info[id].lastTs)),
     networks: [...new Set(sorted.map((id) => info[id].network))],
     personId: null, defaultRoom: null, ...extra,
@@ -431,8 +457,15 @@ function applyEdits(ev, { edits }) {
   return { ...ev, content: { ...ed.content['m.new_content'], 'm.relates_to': ev.content['m.relates_to'] }, edited: true }
 }
 
-export function previewText(ev, me) {
+export function previewText(ev, me, room = null) {
   if (!ev) return ''
+  if (ev.type === 'm.reaction') {
+    const rel = ev.content?.['m.relates_to'] || {}
+    const target = room?.byId?.[rel.event_id] || room?.timeline?.find((e) => e.event_id === rel.event_id)
+    const quoted = target ? previewText(target, null).replace(/\s+/g, ' ').slice(0, 80) : ''
+    const who = ev.sender === me ? 'You reacted' : 'Reacted'
+    return quoted ? `${who} ${rel.key} to "${quoted}"` : `${who} ${rel.key}`
+  }
   const you = ev.sender === me ? 'You: ' : ''
   if (ev.redacted || ev.unsigned?.redacted_because) return you + 'Message deleted'
   if (ev.type === 'm.sticker') return you + 'Sticker'

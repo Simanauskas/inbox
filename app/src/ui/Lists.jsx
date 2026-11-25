@@ -302,3 +302,31 @@ export function ListMembership({ ctx, item }) {
     </ul>
   )
 }
+
+// In a chat: a plan the two of you agreed ("rytoj 18:00" → "darom"), found by the server.
+export function PlanBanner({ ctx, item }) {
+  const { client } = ctx
+  const now = Date.now()
+  const hit = item.rooms.map((id) => [id, client.rooms[id]?.plan]).find(([, p]) => p && p.status === 'new' && new Date(p.start).getTime() > now - 3600_000)
+  if (!hit) return null
+  const [roomId, plan] = hit
+  const links = calendarLinks({ title: plan.title, when: plan.start, minutes: plan.minutes, place: plan.place })
+  if (!links) return null
+  const set = (status) => client.setRoomAccountData(roomId, 'fit.simas.inbox.plan', { ...plan, status })
+  async function add() {
+    if (isNative) await addToAppleCalendar({ title: plan.title, start: links.start, end: links.end, place: plan.place }).catch(() => {})
+    else {
+      const url = URL.createObjectURL(new Blob([links.ics], { type: 'text/calendar' }))
+      const a = document.createElement('a'); a.href = url; a.download = `${plan.title}.ics`; document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }
+    set('added')
+  }
+  return (
+    <div className="contact-prompt plan-banner">
+      <span>📅 <b>{plan.title}</b> · {whenText({ when: plan.start })}{plan.place ? ` · ${plan.place}` : ''}</span>
+      <button className="text-btn inline" onClick={add}>Add to calendar</button>
+      <button className="icon-btn" onClick={() => set('dismissed')} aria-label="Not this one"><Icon name="close" size={16} /></button>
+    </div>
+  )
+}

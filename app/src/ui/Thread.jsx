@@ -7,7 +7,7 @@ import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deli
 import { networkInfo } from '../networks.js'
 import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
 import { ContactPrompt } from './PhoneBook.jsx'
-import { InviteBanner } from './Lists.jsx'
+import { InviteBanner, PlanBanner } from './Lists.jsx'
 import { EMOJI_GRID, quickReactions, splitEmojis } from '../emoji.js'
 import { PEOPLE_TYPE } from '../matrix.js'
 
@@ -145,6 +145,7 @@ export default function Thread({ ctx, item }) {
       </TopBar>
       <ContactPrompt ctx={ctx} item={item} />
       <InviteBanner ctx={ctx} item={item} />
+      <PlanBanner ctx={ctx} item={item} />
       <div className="timeline" ref={scroller} onScroll={onScroll} onClick={() => setActive(null)}>
         {hasMore ? <div className="older">{loading ? <div className="spinner small" /> : <button onClick={loadOlder}>Load older messages</button>}</div>
           : <div className="older muted">Start of your history</div>}

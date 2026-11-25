@@ -9,7 +9,7 @@ const filter = (limit) => ({
     timeline: { limit },
     state: { lazy_load_members: true },
     ephemeral: { types: ['m.receipt', 'm.typing'] },
-    account_data: { types: ['m.fully_read', 'm.marked_unread', 'com.famedly.marked_unread', 'fit.simas.inbox.suggest'] },
+    account_data: { types: ['m.fully_read', 'm.marked_unread', 'com.famedly.marked_unread', 'fit.simas.inbox.suggest', 'fit.simas.inbox.plan'] },
   },
   presence: { not_types: ['*'] },
 })
@@ -199,7 +199,7 @@ export class Client {
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
         heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount, unreadCount: room.unreadCount || 0,
-        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, createTs: room.createTs, roomType: room.roomType || null,
+        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
         // without one, the next "load older" starts from the newest and skips what it has
@@ -251,6 +251,7 @@ export class Client {
         if (ev.type === 'm.fully_read') room.fullyRead = ev.content.event_id
         if (ev.type === 'm.marked_unread' || ev.type === 'com.famedly.marked_unread') room.markedUnread = !!ev.content?.unread
         if (ev.type === 'fit.simas.inbox.suggest') room.suggest = ev.content // reply suggestions from the server
+        if (ev.type === 'fit.simas.inbox.plan') room.plan = ev.content // a plan agreed in this chat (server/suggest)
       }
     }
     // This is your own server and only the bridges can invite you, so accept every invite.
@@ -457,6 +458,13 @@ export class Client {
     g.room = (g.room || []).filter((r) => r.rule_id !== roomId)
     if (muted) g.room.push({ rule_id: roomId, actions: [], enabled: true, default: false })
     this.emit()
+  }
+
+  async setRoomAccountData(roomId, type, content) {
+    const room = this.rooms[roomId]
+    if (room && type === 'fit.simas.inbox.plan') room.plan = content
+    this.emit()
+    await this.api('PUT', `/_matrix/client/v3/user/${enc(this.userId)}/rooms/${enc(roomId)}/account_data/${type}`, content).catch(() => {})
   }
 
   // "Mark as unread" (a dot on the chat until you open it); the bridges pass it on

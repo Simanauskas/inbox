@@ -305,6 +305,84 @@ def suggest(mem, room, ev):
     return replies
 
 
+# --- plans agreed in a chat -> "Add to calendar" -------------------------------------
+
+PLAN = "fit.simas.inbox.plan"
+TIMEISH = re.compile(
+    r"\b([01]?\d|2[0-3])[:.][0-5]\d\b|\b([01]?\d|2[0-3])\s?(val|h)\b|\b(rytoj|ryt|poryt|siandien|šiandien|vakare|"
+    r"pirmad|antrad|treciad|trečiad|ketvirtad|penktad|sestad|šeštad|sekmad|savaitgal|"
+    r"tomorrow|today|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend)", re.I)
+AGREED = re.compile(r"\b(darom|davai|tinka|sutarta|galim|susitariam|iki|ok|okay|taip|joa|puiku|deal|sounds good|see you|let'?s do it|perfect|great)\b|👍|🤝|🤙", re.I)
+LT_DAYS = ["pirmadienis", "antradienis", "treciadienis", "ketvirtadienis", "penktadienis", "sestadienis", "sekmadienis"]
+
+
+def local_now():
+    from zoneinfo import ZoneInfo
+    import datetime as dt
+    return dt.datetime.now(ZoneInfo("Europe/Vilnius"))
+
+
+def detect_plan(c, room, convo, name):
+    """A meeting both sides agreed on in the last messages: {title, start 'YYYY-MM-DDTHH:MM', minutes, place}."""
+    import datetime as dt
+    texts = [clean(e["content"]["body"]) for e in convo[-8:]]
+    if not any(TIMEISH.search(t) for t in texts[-6:]) or not any(AGREED.search(t) for t in texts[-3:]):
+        return None
+    now = local_now()
+    from zoneinfo import ZoneInfo
+    longer = [x for x in texts if len(re.findall(r"\w+", x)) > 3] or texts
+    english = sum(looks_english(x) for x in longer) * 2 > len(longer)
+    lines = []
+    for e in convo[-10:]:
+        when = dt.datetime.fromtimestamp(e["origin_server_ts"] / 1000, ZoneInfo("Europe/Vilnius")).strftime("%a %Y-%m-%d %H:%M")
+        lines.append(f"[{when}] {'Simas' if e['sender'] == USER else name}: {clean(e['content']['body'])[:200]}")
+    system = (
+        f"Today is {now.strftime('%A %Y-%m-%d %H:%M')} ({LT_DAYS[now.weekday()]}) in Vilnius. "
+        "Decide whether Simas and the other person have AGREED on a specific meeting or activity in these messages "
+        "(both confirmed it; a question alone is not agreement). If yes, give its absolute date and start time "
+        "(resolve 'rytoj', 'ketvirtadieni', 'tomorrow', etc. from today's date). "
+        f"Reply with JSON {{\"agreed\": true|false, \"title\": short title in {'English' if english else 'Lithuanian'} naming the activity "
+        f"and \"{name}\" (e.g. {'\"Lunch with Peter\", \"Tennis with Jonas\"' if english else '\"Tenisas su Jonu\", \"Pietus su Petru\"'}), \"date\": \"YYYY-MM-DD\", \"time\": \"HH:MM\", "
+        "\"minutes\": expected length (tennis 90, lunch/coffee 60, call 30), \"place\": place if mentioned else \"\"}}."
+    )
+    r = ollama("/api/chat", {"model": MODEL, "stream": False, "format": "json", "keep_alive": "30m",
+                             "options": {"temperature": 0, "num_predict": 120, "num_ctx": 2048},
+                             "messages": [{"role": "system", "content": system}, {"role": "user", "content": "\n".join(lines)}]})
+    try:
+        d = json.loads(r["message"]["content"])
+    except Exception:
+        return None
+    if d.get("agreed") is not True:
+        return None
+    try:
+        start = dt.datetime.strptime(f"{d['date']} {d['time']}", "%Y-%m-%d %H:%M")
+    except Exception:
+        return None
+    naive_now = now.replace(tzinfo=None)
+    if not (naive_now - dt.timedelta(hours=1) < start < naive_now + dt.timedelta(days=60)):
+        return None
+    key = f"{room}|{start.isoformat()}"
+    if c.execute("select 1 from kv where k=?", ("plan:" + key,)).fetchone():
+        return None  # already offered
+    c.execute("insert or replace into kv values (?, ?)", ("plan:" + key, str(int(time.time()))))
+    c.commit()
+    minutes = d.get("minutes") if isinstance(d.get("minutes"), int) and 15 <= d.get("minutes") <= 480 else 60
+    return {"title": str(d.get("title") or f"{name}")[:80], "start": start.strftime("%Y-%m-%dT%H:%M"), "minutes": minutes,
+            "place": str(d.get("place") or "")[:80], "event_id": convo[-1]["event_id"], "status": "new", "at": int(time.time() * 1000)}
+
+
+def room_name(room):
+    try:
+        st = matrix("GET", f"/_matrix/client/v3/rooms/{q(room)}/state")
+    except Exception:
+        return "them"
+    name = next((e["content"].get("name") for e in st if e["type"] == "m.room.name" and e["content"].get("name")), None)
+    if not name:
+        name = next((e["content"].get("displayname") for e in st if e["type"] == "m.room.member" and e["state_key"] != USER
+                     and "bot:" not in e["state_key"] and e["content"].get("displayname")), "them")
+    return re.sub(r"\s*\((WA|WhatsApp|FB|IG|Telegram|iMessage|SMS)\)\s*$", "", name).split(" ")[0]
+
+
 def put_suggestions(room, ev, replies):
     matrix("PUT", f"/_matrix/client/v3/user/{q(USER)}/rooms/{q(room)}/account_data/{SUGGEST}",
            {"event_id": ev["event_id"], "replies": replies, "at": int(time.time() * 1000), "model": MODEL})
@@ -384,6 +462,14 @@ def loop():
                     else:
                         prev = last_in.get(rid)
                         last_in[rid] = ((prev[0] + "\n" + body) if prev and ev["origin_server_ts"] - prev[1] < 600_000 else body, ev["origin_server_ts"])
+                if evs and time.time() * 1000 - evs[-1]["origin_server_ts"] < FRESH:
+                    try:
+                        plan = detect_plan(c, rid, recent(rid, 10), room_name(rid))
+                        if plan:
+                            matrix("PUT", f"/_matrix/client/v3/user/{q(USER)}/rooms/{q(rid)}/account_data/{PLAN}", plan)
+                            log(f"plan found in {rid[:10]}: {plan['start']}")
+                    except Exception as e:
+                        log("plan check failed:", e)
                 fresh = [e for e in evs if e["sender"] != USER and time.time() * 1000 - e["origin_server_ts"] < FRESH]
                 if fresh and (not evs or evs[-1]["sender"] != USER) and wants_reply(clean(fresh[-1]["content"]["body"])):
                     ev = fresh[-1]

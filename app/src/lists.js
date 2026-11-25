@@ -119,5 +119,5 @@ export function calendarLinks({ title, when, minutes = 90, place = '', details =
     `DTSTART;TZID=${tz}:${local(start)}`, `DTEND;TZID=${tz}:${local(end)}`,
     `SUMMARY:${esc(title)}`, ...(place ? [`LOCATION:${esc(place)}`] : []), ...(details ? [`DESCRIPTION:${esc(details)}`] : []),
     'END:VEVENT', 'END:VCALENDAR'].join('\r\n') + '\r\n'
-  return { google: `https://calendar.google.com/calendar/render?${q}`, ics }
+  return { google: `https://calendar.google.com/calendar/render?${q}`, ics, start, end }
 }

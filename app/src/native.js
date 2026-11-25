@@ -77,3 +77,29 @@ export async function initNative() {
     Keyboard.addListener('keyboardWillHide', () => { root.style.setProperty('--kb', '0px'); root.classList.remove('kb-open') })
   } catch {}
 }
+
+// iPhone app: open Apple Calendar's own "New Event" screen, filled in, with the calendar
+// preselected (his "Simanauskas | Personal"; Settings can't pick one yet). Reading the
+// calendar list needs calendar access once. Returns false if it couldn't open.
+export const CALENDAR_NAME = 'Simanauskas | Personal'
+export async function addToAppleCalendar({ title, start, end, place, notes }) {
+  if (!isNative) return false
+  const { CapacitorCalendar } = await import('@ebarooni/capacitor-calendar')
+  let calendarId
+  try {
+    const p = await CapacitorCalendar.requestFullCalendarAccess()
+    if (p.result === 'granted') {
+      const { result } = await CapacitorCalendar.listCalendars()
+      const want = CALENDAR_NAME.toLowerCase()
+      const label = (c) => `${c.source?.title || c.accountName || ''} | ${c.title || ''}`.toLowerCase()
+      const hit = result.find((c) => (c.title || '').toLowerCase() === want) || result.find((c) => label(c) === want)
+        || result.find((c) => (c.title || '').toLowerCase() === 'personal' && label(c).includes('simanauskas'))
+      calendarId = hit?.id
+    }
+  } catch {}
+  await CapacitorCalendar.createEventWithPrompt({
+    title, startDate: start.getTime(), endDate: end.getTime(), location: place || undefined, description: notes || undefined,
+    ...(calendarId ? { calendarId } : {}),
+  })
+  return true
+}

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { go, back } from '../router.js'
 import { PEOPLE_TYPE } from '../matrix.js'
 import { chooseChannel, normName, previewText } from '../people.js'
-import { isNative, openExternal } from '../native.js'
+import { isNative, addToAppleCalendar } from '../native.js'
 import {
   listsOf, createList, renameList, deleteList, setMember, resolveMember, listsWith,
   createInvite, setInvite, invitesOf, openInviteFor, repliesTo, calendarLinks,
@@ -203,7 +203,7 @@ export function ConfirmInvite({ ctx, invite, item, onClose }) {
   const others = invite.sent.filter((s) => s.key !== item.key && !item.rooms.includes(s.room))
     .map((s) => resolveMember(model, { key: s.key, room: s.room })).filter(Boolean)
   const [step, setStep] = useState('others')
-  const [note, setNote] = useState('Ačiū, jau radau porą – kitą kartą! 🎾')
+  const [note, setNote] = useState('Ačiū, jau susitariau - kitą kartą! 🎾')
   const [busy, setBusy] = useState(false)
   const [title, setTitle] = useState(`${list?.name || 'Meeting'} with ${item.name}`)
   const links = calendarLinks({ title, when: invite.when, minutes: invite.minutes, place: invite.place, details: invite.text })
@@ -248,8 +248,11 @@ export function ConfirmInvite({ ctx, invite, item, onClose }) {
               <>
                 <label className="field">Event<input value={title} onChange={(e) => setTitle(e.target.value)} /></label>
                 <p className="muted small">{whenText(invite)}, {invite.minutes / 60} h{invite.place ? ` · ${invite.place}` : ''}</p>
-                <button className="wide-btn" onClick={() => { if (isNative) openExternal(links.google).catch(() => {}); else window.open(links.google, '_blank', 'noopener'); onClose() }}>Google Calendar</button>
-                {!isNative && <button className="wide-btn" onClick={() => { openIcs(); onClose() }}>Apple Calendar (.ics)</button>}
+                <button className="wide-btn" onClick={async () => {
+                  if (isNative) await addToAppleCalendar({ title, start: links.start, end: links.end, place: invite.place, notes: invite.text }).catch(() => {})
+                  else openIcs()
+                  onClose()
+                }}>Add to Apple Calendar</button>
                 <button className="text-btn" onClick={onClose}>Not now</button>
               </>
             ) : (

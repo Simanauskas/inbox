@@ -428,10 +428,22 @@ function useRecorder(onDone) {
   return { rec, start, stop, elapsed: rec ? Date.now() - rec.start : 0 }
 }
 
+// Reply suggestions the server prepared for the newest message in this chat (server/suggest),
+// shown only while that message is still the last one and he hasn't replied.
+export function suggestionsFor(room, me) {
+  const s = room?.suggest
+  if (!s?.replies?.length) return []
+  const last = [...(room.timeline || [])].reverse().find((e) => e.type === 'm.room.message' && !e.local)
+  if (!last || last.sender === me || last.event_id !== s.event_id) return []
+  return s.replies
+}
+
 function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   const { client, model } = ctx
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
+  const suggested = suggestionsFor(client.rooms[target], client.userId)
+  const useSuggestion = (s) => { setText(s); setTimeout(() => { const el = area.current; if (el) { el.focus(); el.setSelectionRange(s.length, s.length) } }, 0) }
   const [pending, setPending] = useState([]) // photos/files picked, waiting for a caption + send
   const fileInput = useRef(null)
   const cameraInput = useRef(null)
@@ -547,6 +559,11 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
         </div>
       )}
       {err && <div className="error small">{err}</div>}
+      {!text && !pending.length && !voice.rec && suggested.length > 0 && (
+        <div className="suggestions" aria-label="Suggested replies">
+          {suggested.map((s) => <button key={s} className="suggestion" onClick={() => useSuggestion(s)}>{s}</button>)}
+        </div>
+      )}
       {pending.length > 0 && (
         <div className="pending">
           {pending.map((p, i) => (
@@ -580,8 +597,12 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
           <input ref={cameraInput} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFiles} />
           <textarea
             ref={area} rows={1} value={text} onChange={onChange} onPaste={onPaste}
-            placeholder={pending.length ? 'Add a caption…' : `Message on ${networkInfo(net).name}`}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send() } }}
+            placeholder={pending.length ? 'Add a caption…' : suggested[0] && !matchMedia('(pointer: coarse)').matches ? `${suggested[0]}   ⇥ Tab` : `Message on ${networkInfo(net).name}`}
+            onKeyDown={(e) => {
+              // Tab on an empty box takes the first suggestion (like code completion)
+              if (e.key === 'Tab' && !e.shiftKey && !text && suggested[0]) { e.preventDefault(); useSuggestion(suggested[0]); return }
+              if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send() }
+            }}
           />
           {text.trim() || pending.length || !canRecord
             ? <button className="send" onClick={send} disabled={!text.trim() && !pending.length} aria-label="Send" style={color}><Icon name="send" /></button>

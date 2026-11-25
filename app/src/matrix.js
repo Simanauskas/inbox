@@ -9,7 +9,7 @@ const filter = (limit) => ({
     timeline: { limit },
     state: { lazy_load_members: true },
     ephemeral: { types: ['m.receipt', 'm.typing'] },
-    account_data: { types: ['m.fully_read', 'm.marked_unread', 'com.famedly.marked_unread'] },
+    account_data: { types: ['m.fully_read', 'm.marked_unread', 'com.famedly.marked_unread', 'fit.simas.inbox.suggest'] },
   },
   presence: { not_types: ['*'] },
 })
@@ -199,7 +199,7 @@ export class Client {
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
         heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount, unreadCount: room.unreadCount || 0,
-        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, createTs: room.createTs, roomType: room.roomType || null,
+        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, createTs: room.createTs, roomType: room.roomType || null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
         // without one, the next "load older" starts from the newest and skips what it has
@@ -250,6 +250,7 @@ export class Client {
       for (const ev of r.account_data?.events || []) {
         if (ev.type === 'm.fully_read') room.fullyRead = ev.content.event_id
         if (ev.type === 'm.marked_unread' || ev.type === 'com.famedly.marked_unread') room.markedUnread = !!ev.content?.unread
+        if (ev.type === 'fit.simas.inbox.suggest') room.suggest = ev.content // reply suggestions from the server
       }
     }
     // This is your own server and only the bridges can invite you, so accept every invite.

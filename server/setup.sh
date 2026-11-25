@@ -41,6 +41,8 @@ profiles=$BRIDGES
 [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ] && profiles="$profiles tunnel"
 # your phone book for the app: iCloud contacts (or BlueBubbles on the Mac as a fallback)
 if [ -n "${ICLOUD_USER:-}" ] && [ -n "${ICLOUD_APP_PASSWORD:-}" ] || [ -n "${BLUEBUBBLES_PASSWORD:-}" ]; then profiles="$profiles contacts"; fi
+# reply suggestions in his style, from a small open-source model on this server (SUGGEST=1 in .env)
+if [ "${SUGGEST:-}" = 1 ]; then profiles="$profiles suggest"; fi
 COMPOSE_PROFILES=$(echo $profiles | tr ' ' ',')
 setenv COMPOSE_PROFILES "$COMPOSE_PROFILES"
 export COMPOSE_PROFILES POSTGRES_PASSWORD
@@ -278,6 +280,16 @@ fi
 
 say "Starting everything ($COMPOSE_PROFILES)"
 docker compose up -d
+
+if [ "${SUGGEST:-}" = 1 ]; then
+  say "Reply suggestions: fetching the models (first time: a few GB)"
+  docker compose exec -T ollama ollama pull "${SUGGEST_MODEL:-gemma3:4b}" >/dev/null
+  docker compose exec -T ollama ollama pull "${SUGGEST_EMBED_MODEL:-bge-m3}" >/dev/null
+  if [ ! -f "$DATA/suggest/suggest.db" ]; then
+    say "Reply suggestions: learning from your chat history (runs in the background)"
+    nohup docker compose run --rm -T suggest python /app/suggest.py --backfill > "$DATA/suggest-backfill.log" 2>&1 &
+  fi
+fi
 
 # the old cron-based contacts sync is replaced by the contacts service
 ( crontab -l 2>/dev/null | grep -v '/contacts.sh' ) | crontab - 2>/dev/null || true

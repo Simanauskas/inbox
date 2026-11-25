@@ -445,3 +445,8 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 .invite-banner { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .confirm-card textarea { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px; font-family: inherit; }
 .lists .row-main, .list-page .row-main, .add-people .row-main { display: flex; align-items: center; gap: 8px; border: 0; padding: 0; flex: 1; min-width: 0; }
+
+/* reply suggestions above the message box */
+.suggestions { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; }
+.suggestions::-webkit-scrollbar { display: none; }
+.suggestion { flex: none; max-width: 80%; padding: 8px 12px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--text); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -31,7 +31,10 @@ self.addEventListener('push', (e) => {
 })
 
 async function handlePush(p) {
-  if (typeof p.unread === 'number' && self.navigator.setAppBadge) {
+  // While Inbox is open (e.g. the Mac Dock app), the app keeps the badge itself from what
+  // the list shows; the server's number also counts hidden chats (archived, bot chats).
+  const open = (await self.clients.matchAll({ type: 'window' })).length > 0
+  if (!open && typeof p.unread === 'number' && self.navigator.setAppBadge) {
     await (p.unread ? self.navigator.setAppBadge(p.unread) : self.navigator.clearAppBadge()).catch(() => {})
   }
   // Bridges import old history as if it were new. Fold anything older than a

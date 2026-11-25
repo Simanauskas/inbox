@@ -312,12 +312,22 @@ function Img({ client, c, sticker }) {
   )
 }
 
+// Videos keep their own shape (portrait phone videos too), up to 320 × 420, before and
+// while playing — a fixed small 16:9 box made them tiny until you went full screen.
+function videoBox(info) {
+  const w = info?.w || info?.thumbnail_info?.w || 16
+  const h = info?.h || info?.thumbnail_info?.h || 9
+  const k = Math.min(320 / w, 420 / h)
+  return { width: Math.round(w * k), aspectRatio: `${w} / ${h}` }
+}
+
 function Video({ client, c }) {
   const [src, setSrc] = useState(null)
   const poster = useMedia(client, c.info?.thumbnail_url, 640)
-  if (src) return <video className="media-video" src={src} controls autoPlay playsInline />
+  const box = videoBox(c.info)
+  if (src) return <video className="media-video" style={box} src={src} poster={poster || undefined} controls autoPlay playsInline />
   return (
-    <button className="media video-ph" onClick={(e) => { e.stopPropagation(); client.mediaUrl(c.url, { download: true })?.then(setSrc) }}>
+    <button className="media video-ph" style={box} onClick={(e) => { e.stopPropagation(); client.mediaUrl(c.url, { download: true })?.then(setSrc) }}>
       {poster && <img src={poster} alt="" />}<span className="play">▶</span>
     </button>
   )

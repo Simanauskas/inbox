@@ -192,7 +192,8 @@ function Main({ session, onLogout }) {
     }
   }, [client, onLogout, session])
 
-  const totalUnread = model.items.reduce((s, i) => s + i.unread, 0)
+  // archived chats don't count (like WhatsApp); their unread shows on the Archived row
+  const totalUnread = model.items.reduce((s, i) => s + (i.archived ? 0 : i.unread), 0)
   useEffect(() => {
     document.title = totalUnread ? `(${totalUnread}) Inbox` : 'Inbox'
     // setAppBadge(undefined) would show an empty badge; clear it when nothing is unread

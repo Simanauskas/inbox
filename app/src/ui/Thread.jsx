@@ -323,11 +323,29 @@ function videoBox(info) {
 
 function Video({ client, c }) {
   const [src, setSrc] = useState(null)
+  const [playing, setPlaying] = useState(false)
   const poster = useMedia(client, c.info?.thumbnail_url, 640)
   const box = videoBox(c.info)
-  if (src) return <video className="media-video" style={box} src={src} poster={poster || undefined} controls autoPlay playsInline />
+  const ref = useRef(null)
+  // No preview picture (WhatsApp's bridge doesn't send one): once the video scrolls into
+  // view, load it and show its first frame instead of an empty box. Large ones wait for a tap.
+  const autoLoad = !c.info?.thumbnail_url && (c.info?.size || 0) <= 25 * 1024 * 1024
+  useEffect(() => {
+    if (!autoLoad || src || !ref.current) return
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) { io.disconnect(); client.mediaUrl(c.url, { download: true })?.then(setSrc).catch(() => {}) }
+    }, { rootMargin: '200px' })
+    io.observe(ref.current)
+    return () => io.disconnect()
+  }, [autoLoad, src, c.url, client])
+  if (src) {
+    return (
+      <video className="media-video" style={box} src={`${src}#t=0.1`} poster={poster || undefined}
+        controls preload="metadata" playsInline autoPlay={playing} onClick={(e) => e.stopPropagation()} />
+    )
+  }
   return (
-    <button className="media video-ph" style={box} onClick={(e) => { e.stopPropagation(); client.mediaUrl(c.url, { download: true })?.then(setSrc) }}>
+    <button ref={ref} className="media video-ph" style={box} onClick={(e) => { e.stopPropagation(); setPlaying(true); client.mediaUrl(c.url, { download: true })?.then(setSrc) }}>
       {poster && <img src={poster} alt="" />}<span className="play">▶</span>
     </button>
   )

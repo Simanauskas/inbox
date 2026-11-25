@@ -213,3 +213,20 @@ these images. Details and gotchas: `references/server.md`.
   on sky — waiting for his OK on sending chat text to Anthropic, model choice (Opus 5.5 default vs
   Haiku 5.5) and an `ANTHROPIC_API_KEY` in server/.env; then detecting meetings agreed in normal chats
   to offer the calendar step.
+
+## Reply suggestions and agreed plans (25 Nov 2026)
+- Service `suggest` (profile `suggest`, `SUGGEST=1` in .env) + `ollama` (ollama/ollama:0.40.16, models
+  gemma3:4b and bge-m3 in data/ollama). `server/suggest/suggest.py`: watches DM rooms via /sync as @s;
+  memory = SQLite `data/suggest/suggest.db` of (their message → his reply) pairs with bge-m3 embeddings
+  (~5.2k from history via `--backfill`, grows with every reply he sends). For a fresh inbound message
+  it prompts Gemma with `data/suggest/style.md` (his style, on the server only — never in the repo) +
+  the most similar past exchanges (same language) and writes 3 replies to room account data
+  `fit.simas.inbox.suggest` {event_id, replies}. English chats get a separate English prompt (the
+  small model drifts to Lithuanian otherwise). Skips automated messages; never learns/suggests his
+  self-chat (`SUGGEST_SELF_NAMES`), commands, keys, IBANs, passwords (`SENSITIVE`). ~10–15 s each.
+- App: chips above the composer (tap = fill the box), Mac ghost text "⇥ Tab" (`suggestionsFor`).
+- Plans: when recent messages mention a time/day and someone confirmed, `detect_plan` asks Gemma for
+  {agreed, title, date, time, minutes, place} (relative days from today in Vilnius) → room account data
+  `fit.simas.inbox.plan` (offered once per room+start) → `PlanBanner` in the chat: "Add to calendar"
+  (Apple Calendar via @ebarooni/capacitor-calendar, "Simanauskas | Personal" preselected; .ics on the
+  web) / ✕. He chose free local models over a paid Claude API key.

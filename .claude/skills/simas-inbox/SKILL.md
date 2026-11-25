@@ -230,3 +230,17 @@ these images. Details and gotchas: `references/server.md`.
   `fit.simas.inbox.plan` (offered once per room+start) → `PlanBanner` in the chat: "Add to calendar"
   (Apple Calendar via @ebarooni/capacitor-calendar, "Simanauskas | Personal" preselected; .ics on the
   web) / ✕. He chose free local models over a paid Claude API key.
+
+## Group info (25 Nov 2026)
+- Tapping a group's name/avatar opens `ui/Group.jsx` (Person.jsx routes kind 'group' there): name and
+  description (editable via m.room.name / m.room.topic where allowed), members (`group.js` →
+  `groupMembers`: Inbox name > contact card > app name; You, admins, A–Z; Admin = power ≥ 50).
+- Tap a member: Message (opens their existing chat, else `createDM(ghost)` — bridgev2 turns a new
+  room with an invited ghost into the 1:1 portal; iMessage sends `pm +number` to the iMessage bot
+  chat), View contact, Add to contacts (ConfirmCard), Remove from group (kick; needs power).
+- Add members: people with a 1:1 chat on the same app (`addable`), or a typed number on WhatsApp
+  (`ghostFor`) → Matrix invite → bridge adds them on the app. Invite via link (WhatsApp): sends
+  `!wa invite-link` in the group; the command and the bot's answer are hidden (`isGroupCommand`).
+  Leave group = Matrix leave (bridge leaves on the app).
+- Capabilities per bridge in `groupCaps`: WhatsApp all; Messenger/Instagram/Telegram add, remove,
+  rename, leave; iMessage view-only. Rights come from the room's power levels (`canDo`).

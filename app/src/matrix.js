@@ -199,7 +199,7 @@ export class Client {
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
         heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount, unreadCount: room.unreadCount || 0,
-        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null,
+        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null, topic: room.topic || null, power: room.power || null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
         // without one, the next "load older" starts from the newest and skips what it has
@@ -269,6 +269,8 @@ export class Client {
     switch (ev.type) {
       case 'm.room.name': room.name = c.name || null; break
       case 'm.room.avatar': room.avatarUrl = c.url || null; break
+      case 'm.room.topic': room.topic = c.topic || null; break
+      case 'm.room.power_levels': room.power = { users: c.users || {}, users_default: c.users_default, invite: c.invite, kick: c.kick, events: c.events || {}, state_default: c.state_default }; break
       case 'm.room.create': room.createTs = ev.origin_server_ts || 0; room.roomType = c.type || null; break
       case 'm.bridge':
         room.bridge = { ...c, stateKey: ev.state_key }
@@ -339,6 +341,48 @@ export class Client {
       }
       this.emit()
     } catch { room.membersLoaded = false }
+  }
+
+  // Power levels and the description, which an older cached copy of the room may not have.
+  async loadGroupState(roomId) {
+    const room = this.rooms[roomId]
+    if (!room) return
+    for (const type of ['m.room.power_levels', 'm.room.topic']) {
+      try {
+        const c = await this.api('GET', `/_matrix/client/v3/rooms/${enc(roomId)}/state/${type}`)
+        this.applyState(room, { type, state_key: '', content: c })
+      } catch {}
+    }
+    this.emit()
+  }
+
+  // --- groups: the bridge carries these to the app (add / remove people, rename, leave) ---
+  invite(roomId, userId) {
+    return this.api('POST', `/_matrix/client/v3/rooms/${enc(roomId)}/invite`, { user_id: userId })
+  }
+  kick(roomId, userId) {
+    return this.api('POST', `/_matrix/client/v3/rooms/${enc(roomId)}/kick`, { user_id: userId })
+  }
+  async leave(roomId) {
+    await this.api('POST', `/_matrix/client/v3/rooms/${enc(roomId)}/leave`, {})
+    if (this.rooms[roomId]) this.rooms[roomId].membership = 'leave'
+    this.emit()
+  }
+  async setRoomState(roomId, type, content) {
+    await this.api('PUT', `/_matrix/client/v3/rooms/${enc(roomId)}/state/${type}/`, content)
+    const room = this.rooms[roomId]
+    if (room) { this.applyState(room, { type, state_key: '', content }); this.emit() }
+  }
+
+  // Resolves when a room appears in sync and test(room) holds (or null after the timeout).
+  waitFor(test, timeoutMs = 30000) {
+    return new Promise((resolve) => {
+      const check = () => { const r = Object.values(this.rooms).find((x) => x.membership === 'join' && test(x)); if (r) { done(); resolve(r) } }
+      const done = () => { this.listeners.delete(check); clearTimeout(t) }
+      const t = setTimeout(() => { done(); resolve(null) }, timeoutMs)
+      this.listeners.add(check)
+      check()
+    })
   }
 
   // --- sending ---

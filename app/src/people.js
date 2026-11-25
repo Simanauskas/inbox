@@ -13,9 +13,18 @@ export function isDisplayable(ev) {
   if (ev.redacted || ev.unsigned?.redacted_because) return ev.type === 'm.room.message' || ev.type === 'm.sticker'
   if (ev.type === 'm.sticker') return true
   if (ev.type !== 'm.room.message') return false
+  if (isGroupCommand(ev)) return false
   const rel = ev.content?.['m.relates_to']
   if (rel?.rel_type === 'm.replace') return false
   return !!ev.content?.msgtype
+}
+
+// The bridge answers "invite-link" with a notice in the group; neither should show as a message.
+export function isGroupCommand(ev) {
+  const c = ev.content || {}
+  if (c.msgtype === 'm.text' && /^!wa invite-link\b/.test(c.body || '')) return true
+  if (c.msgtype === 'm.notice' && isBotUser(ev.sender) && /^(https:\/\/chat\.whatsapp\.com\/\S+|Failed to get invite link.*)$/.test((c.body || '').trim())) return true
+  return false
 }
 
 export function otherMembers(room, me) {

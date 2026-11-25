@@ -5,8 +5,13 @@ import { linkRoom, unlinkRoom, setDefault, renamePerson, mergePeople, normName }
 import { Avatar, NetBadge, TopBar, identityOf, timeShort } from './common.jsx'
 import { PhoneBookCard, ContactDetails } from './PhoneBook.jsx'
 import { ListMembership } from './Lists.jsx'
+import GroupPage from './Group.jsx'
 
-export default function Person({ ctx, item }) {
+export default function Person(props) {
+  return props.item.kind === 'group' ? <GroupPage {...props} /> : <Contact {...props} />
+}
+
+function Contact({ ctx, item }) {
   const { client, model } = ctx
   const [name, setName] = useState(item.name)
   // follow the name when it changes elsewhere (e.g. a contact card was saved),

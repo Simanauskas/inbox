@@ -4,6 +4,7 @@ import { PEOPLE_TYPE } from '../matrix.js'
 import { linkRoom, unlinkRoom, setDefault, renamePerson, mergePeople, normName } from '../people.js'
 import { Avatar, NetBadge, TopBar, identityOf, timeShort } from './common.jsx'
 import { PhoneBookCard, ContactDetails } from './PhoneBook.jsx'
+import { ListMembership } from './Lists.jsx'
 
 export default function Person({ ctx, item }) {
   const { client, model } = ctx
@@ -56,6 +57,7 @@ export default function Person({ ctx, item }) {
         {err && <p className="error">{err}</p>}
 
         {item.kind === 'person' && <><h3 className="section">Name &amp; contacts</h3><ContactDetails ctx={ctx} item={item} /><PhoneBookCard ctx={ctx} item={item} /></>}
+        {item.kind === 'person' && <><h3 className="section">Lists</h3><ListMembership ctx={ctx} item={item} /></>}
 
         <h3 className="section">Apps</h3>
         <p className="hint">New messages go to the <b>default</b> app. If they write to you on another app, your reply goes back there.</p>

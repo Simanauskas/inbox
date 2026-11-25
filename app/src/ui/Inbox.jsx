@@ -13,6 +13,7 @@ export default function Inbox({ ctx, selected }) {
   const [showEmpty, setShowEmpty] = useState(false)
 
   // SMS chats are under the iM filter, so the filter row stays on one line
+  const listCount = Object.keys(model.config.lists || {}).length
   const archivedCount = useMemo(() => model.items.filter((i) => i.archived).length, [model])
   const archivedUnread = useMemo(() => model.items.filter((i) => i.archived && (i.unread || i.mutedUnread || i.markedUnread)).length, [model])
   const nets = useMemo(() => [...new Set(model.items.flatMap((i) => i.networks.map((n) => (n === 'sms' ? 'imessage' : n))))], [model])
@@ -72,6 +73,9 @@ export default function Inbox({ ctx, selected }) {
         )}
         {filter === 'all' && !q && archivedCount > 0 && (
           <li><button className="archived-row" onClick={() => setFilter('archived')}><Icon name="archive" size={20} /> <span>Archived</span>{archivedUnread > 0 && <span className="badge quiet" aria-label={`${archivedUnread} unread`}>{archivedUnread}</span>}<span className="archived-count">{archivedCount}</span></button></li>
+        )}
+        {filter === 'all' && !q && (
+          <li><button className="archived-row" onClick={() => go('lists')}><Icon name="people" size={20} /> <span>Lists</span><span className="archived-count">{listCount || ''}</span></button></li>
         )}
         {active.map((i) => <Row key={i.key} client={client} i={i} selected={selected} />)}
         {client.synced && empty.length > 0 && (

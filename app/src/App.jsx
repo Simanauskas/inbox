@@ -10,6 +10,7 @@ import Person from './ui/Person.jsx'
 import Merge from './ui/Merge.jsx'
 import Settings from './ui/Settings.jsx'
 import Search from './ui/Search.jsx'
+import { ListsPage, ListPage } from './ui/Lists.jsx'
 import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from './push.js'
 import { idbGet, idbDel, idbSet } from './idb.js'
 import { indexContacts } from './contacts.js'
@@ -219,6 +220,8 @@ function Main({ session, onLogout }) {
   else if (route.view === 'merge') page = <Merge ctx={ctx} />
   else if (route.view === 'settings') page = <Settings ctx={ctx} />
   else if (route.view === 'search') page = <Search ctx={ctx} />
+  else if (route.view === 'lists') page = <ListsPage ctx={ctx} />
+  else if (route.view === 'list' && route.arg) page = <ListPage key={route.arg} ctx={ctx} id={route.arg} />
   else if ((route.view === 't' || route.view === 'p') && !client.synced) page = <div className="empty-pane"><div className="spinner" /></div>
 
   const updateBar = updateReady && <button className="update-bar" onClick={() => location.reload()}>A new version of Inbox is ready. <b>Update</b></button>

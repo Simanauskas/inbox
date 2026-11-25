@@ -415,3 +415,33 @@ li:last-child .row-main { border-bottom: 0; }
 html, body { overscroll-behavior-x: none; }
 .archived-row .badge { margin-left: auto; }
 .archived-row .badge + .archived-count { margin-left: 10px; }
+
+/* Lists (e.g. Tennis) and invites */
+.lists .card-list .row, .list-page .card-list .row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; cursor: pointer; }
+.list-icon { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--accent); flex: none; }
+.card-list .empty { padding: 20px; }
+.new-list { display: flex; gap: 8px; margin-top: 12px; }
+.new-list input, .add-people input, .list-title, .invite-form textarea, .invite-form input, .invite-form select {
+  flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px; font-family: inherit; }
+.list-title { font-size: 20px; font-weight: 700; border-color: transparent; background: transparent; padding: 6px 4px; width: 100%; }
+.list-title:focus { border-color: var(--line); background: var(--bg); }
+.list-head { display: flex; align-items: baseline; justify-content: space-between; }
+.pick-row { display: flex; align-items: center; padding-right: 8px; }
+.pick-row .row { flex: 1; }
+.pick-row input[type=checkbox], .card-list label.row input[type=checkbox] { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.add-people { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+ul.plain { list-style: none; margin: 0; padding: 0; }
+.add-people .row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 4px; text-align: left; }
+.invite-form { display: flex; flex-direction: column; gap: 10px; }
+.invite-form .two { display: flex; gap: 8px; }
+.invite-form .two > * { flex: 1; min-width: 0; }
+.invite-form .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.invite { margin-bottom: 10px; }
+.invite.confirmed, .invite.closed { opacity: 0.75; }
+.invite-top { display: flex; flex-direction: column; gap: 2px; }
+.invite-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.invite-row .link { color: var(--accent); font-weight: 550; flex: none; }
+.invite-reply { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invite-banner { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.confirm-card textarea { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px; font-family: inherit; }
+.lists .row-main, .list-page .row-main, .add-people .row-main { display: flex; align-items: center; gap: 8px; border: 0; padding: 0; flex: 1; min-width: 0; }

@@ -322,3 +322,40 @@ test('group reactions say who; Inbox\'s own "chat is open" rule is not a mute', 
   ] } } }
   assert.deepEqual([...mutedRoomIds(ad)], ['!b'])
 })
+
+test('lists and invites: members survive combining, replies, calendar links', async () => {
+  const L = await import('./lists.js')
+  const r = {
+    a: room('a', 'whatsapp', '@whatsapp_1:x', 'Jonas', [msg('@whatsapp_1:x', now - 10 * H)]),
+    b: room('b', 'facebook', '@facebook_2:x', 'Rimas', [msg('@facebook_2:x', now - 10 * H)]),
+  }
+  let m = buildModel(r, {}, ME, null)
+  const ia = m.items.find((i) => i.rooms.includes('a'))
+  const ib = m.items.find((i) => i.rooms.includes('b'))
+  let { config, id } = L.createList(null, 'Tennis')
+  config = L.setMember(config, id, ia, true)
+  config = L.setMember(config, id, ib, true)
+  assert.deepEqual(L.listsOf(config).map((l) => [l.name, l.members.length]), [['Tennis', 2]])
+  assert.equal(L.listsWith(config, ia).length, 1)
+  // invite goes out; Jonas answers
+  const sentAt = now - 2 * H
+  const inv = L.createInvite(config, { listId: id, text: 'Kortas 14:00?', when: '2026-11-25T14:00', sent: [
+    { key: ia.key, room: 'a', ts: sentAt }, { key: ib.key, room: 'b', ts: sentAt },
+  ] })
+  config = inv.config
+  r.a.timeline = [...r.a.timeline, msg('@whatsapp_1:x', now - H, 'Taip, žaidžiam!')]
+  m = buildModel(r, {}, ME, config)
+  const v = L.openInviteFor(config, m.items.find((i) => i.rooms.includes('a')))
+  assert.equal(v.id, inv.id)
+  const replies = L.repliesTo(v, m, r, ME)
+  assert.deepEqual(Object.keys(replies), [ia.key])
+  assert.equal(replies[ia.key].content.body, 'Taip, žaidžiam!')
+  config = L.setInvite(config, inv.id, { status: 'confirmed', with: ia.key })
+  assert.equal(L.openInviteFor(config, ia), null)
+  // calendar
+  const c = L.calendarLinks({ title: 'Tennis with Jonas', when: '2026-11-25T14:00', minutes: 90, place: 'SEB Arena' })
+  assert.match(c.google, /dates=20261125T140000%2F20261125T153000/)
+  assert.match(c.google, /ctz=Europe%2FVilnius/)
+  assert.match(c.ics, /DTSTART;TZID=Europe\/Vilnius:20261125T140000\r\nDTEND;TZID=Europe\/Vilnius:20261125T153000/)
+  assert.equal(L.calendarLinks({ title: 'x', when: '' }), null)
+})

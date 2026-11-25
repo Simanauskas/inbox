@@ -149,6 +149,34 @@ def ok_pair(them, me):
     return True
 
 
+EN_WORDS = {"the", "you", "is", "are", "and", "to", "of", "it", "for", "with", "this", "that", "can", "will",
+            "what", "how", "i", "we", "have", "do", "not", "be", "on", "at", "your", "my", "me", "great", "thanks", "ok"}
+
+
+LT_WORDS = {"ir", "kad", "tai", "nu", "joa", "nea", "galim", "aciu", "ačiū", "taip", "ne", "as", "aš", "tu", "jau", "dar",
+            "labas", "gerai", "davai", "aisku", "kur", "kada", "kaip", "busiu", "būsiu", "rytoj", "ryt", "siandien",
+            "šiandien", "nzn", "seni", "brol", "puiku", "zupa", "valio", "darom", "parasysiu", "tuomet", "bet", "su",
+            "man", "tau", "mes", "jus", "jūs", "cia", "čia", "ten", "kas", "ka", "ką", "gal", "reik", "reikia", "labai"}
+
+
+def looks_english(text):
+    """English unless it has Lithuanian letters or common Lithuanian words (incl. his diacritic-free spelling)."""
+    words = re.findall(r"[a-ząčęėįšųūž']+", text.lower())
+    if not words or re.search(r"[ąčęėįšųūž]", text.lower()):
+        return False
+    if any(w in LT_WORDS for w in words):
+        return False
+    return sum(w in EN_WORDS for w in words) >= 1 or len(words) <= 3
+
+
+# 3: automated messages (businesses, notifications) don't get suggestions
+AUTOMATED = re.compile(r"unsubscribe|notification preferences|do not reply|neatsakykite|atsisakyti|verification code|patvirtinimo kodas|your code is|\bOTP\b", re.I)
+
+
+def wants_reply(text):
+    return bool(text) and len(text) <= 600 and not AUTOMATED.search(text)
+
+
 def clean(body):
     lines = body.split("\n")
     while lines and lines[0].startswith(">"):  # quoted reply fallback
@@ -220,29 +248,57 @@ def recent(room, limit=12):
 def suggest(mem, room, ev):
     convo = recent(room)
     their = clean(ev["content"]["body"])
-    examples = mem.similar(their, room)
-    lines = [f"{'Simas' if e['sender'] == USER else 'Them'}: {clean(e['content']['body'])}" for e in convo]
-    ex = "\n".join(f"Them: {t}\nSimas: {m}" for _, t, m in examples)
+    # the conversation's language: its last few real sentences (one-word "Okaay" says nothing)
+    texts = [clean(e["content"]["body"]) for e in convo[-6:]]
+    longer = [x for x in texts if len(re.findall(r"\w+", x)) > 3] or texts
+    english = sum(looks_english(x) for x in longer) * 2 > len(longer)
+    examples = mem.similar(their, room, k=12)
+    # examples in the same language as their message, so the model answers in that language
+    same = [x for x in examples if looks_english(x[1]) == english]
+    examples = (same or examples)[:6]
+    lines = [f"{'Simas' if e['sender'] == USER else 'Them'}: {clean(e['content']['body'])[:200]}" for e in convo[-8:]]
+    ex = "\n".join(f"Them: {t[:150]}\nSimas: {m[:120]}" for _, t, m in examples[:5])
+    lang = "English" if english else "Lithuanian (usually without diacritics, as he writes)"
     system = (
         "You write reply suggestions for Simas to send in a chat. Match his style exactly: "
         "his language choice, length, spelling, punctuation and emoji habits.\n\n"
         f"How Simas writes:\n{style()}\n\n"
         f"How he actually replied to similar messages before:\n{ex}\n\n"
+        f"Write the replies in {lang}, the language of their last message.\n"
         "Reply with JSON {\"replies\": [three short, different messages Simas could send next]}: "
         "usually one that agrees/confirms, one that declines or proposes an alternative, and one that asks "
         "a short follow-up — only when that fits the conversation. Write as Simas, never explain."
     )
-    user = "Conversation (oldest first):\n" + "\n".join(lines) + "\n\nSimas's next message options:"
+    user = "Conversation (oldest first):\n" + "\n".join(lines) + f"\n\nSimas's next message options, in {'English' if english else 'Lithuanian'}:"
     t = time.time()
-    r = ollama("/api/chat", {"model": MODEL, "stream": False, "format": "json", "keep_alive": "30m",
-                             "options": {"temperature": 0.6, "num_predict": 200},
-                             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
-    try:
-        replies = [s.strip() for s in json.loads(r["message"]["content"]).get("replies", []) if isinstance(s, str) and s.strip()]
-    except Exception:
-        replies = []
+
+    def ask(sys_prompt):
+        r = ollama("/api/chat", {"model": MODEL, "stream": False, "format": "json", "keep_alive": "30m",
+                                 "options": {"temperature": 0.6, "num_predict": 120, "num_ctx": 2048},
+                                 "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user}]})
+        try:
+            return [x.strip() for x in json.loads(r["message"]["content"]).get("replies", []) if isinstance(x, str) and x.strip()]
+        except Exception:
+            return []
+
+    if english:
+        # the Lithuanian profile and examples pull a small model back to Lithuanian, so English
+        # conversations get their own short prompt with only his English replies as examples
+        en_ex = "\n".join(f"Them: {t[:150]}\nSimas: {m[:120]}" for _, t, m in examples if looks_english(m))
+        system = ("You write reply suggestions for Simas in an English chat. He writes English short and casual, "
+                  "no long explanations, sometimes one emoji (👍🙏😄). Examples: \"cool\", \"Great, your office then?\", "
+                  "\"sounds good, let's do it\", \"thanks!\".\n"
+                  + (f"How he replied in English before:\n{en_ex}\n" if en_ex else "")
+                  + "Reply with JSON {\"replies\": [exactly three short, different messages Simas could send next]}: "
+                  "one agreeing, one with a short follow-up or question, one alternative. Write as Simas, never explain.")
+    replies = ask(system)
+    if english and sum(looks_english(x) or len(x) < 4 for x in replies) < 2:
+        # small models drift to his main language: ask once more, firmly, and keep only English
+        replies = [x for x in ask("IMPORTANT: the conversation is in English. Answer ONLY in English, short and casual "
+                                  "like Simas writes in English (e.g. \"sounds good\", \"great, thanks!\", \"cool, let's do it\").\n\n" + system)
+                   if looks_english(x) or len(x) < 4]
     # his own earlier answer to almost the same message goes first
-    if examples and examples[0][0] > 0.86 and examples[0][2] not in replies:
+    if examples and examples[0][0] > 0.9 and len(their) >= 12 and len(examples[0][2]) <= 80 and examples[0][2] not in replies:
         replies.insert(0, examples[0][2])
     replies = [x for x in dict.fromkeys(replies) if not SENSITIVE.search(x)][:3]
     log(f"suggested in {time.time() - t:.0f}s for {room[:10]}: {len(replies)} replies, best match {examples[0][0]:.2f}" if examples else f"suggested for {room[:10]}")
@@ -329,7 +385,7 @@ def loop():
                         prev = last_in.get(rid)
                         last_in[rid] = ((prev[0] + "\n" + body) if prev and ev["origin_server_ts"] - prev[1] < 600_000 else body, ev["origin_server_ts"])
                 fresh = [e for e in evs if e["sender"] != USER and time.time() * 1000 - e["origin_server_ts"] < FRESH]
-                if fresh and (not evs or evs[-1]["sender"] != USER):
+                if fresh and (not evs or evs[-1]["sender"] != USER) and wants_reply(clean(fresh[-1]["content"]["body"])):
                     ev = fresh[-1]
                     try:
                         replies = suggest(mem, rid, ev)

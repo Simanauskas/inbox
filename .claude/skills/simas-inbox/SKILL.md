@@ -198,3 +198,18 @@ these images. Details and gotchas: `references/server.md`.
 - **Never put real names, numbers or messages into tests, commits or the repo** (use made-up data);
   changes to sky's SSH config need his explicit OK.
 - Explain things in plain words; give commands in separate copyable blocks.
+
+## Lists and invites (25 Nov 2026)
+- `app/src/lists.js` (pure, tested) + `ui/Lists.jsx`. Stored in the people account data:
+  `lists: {id: {name, members: [{key, room}]}}` and `invites: {id: {listId, text, when (local
+  "YYYY-MM-DDTHH:MM"), minutes, place, sent: [{key, room, ts}], at, status open|confirmed|closed, with}}`.
+  Members/recipients are kept by item key + one room so combining chats doesn't lose them (`resolveMember`).
+- Inbox list → "Lists" row → `#/lists` → `#/list/<id>`: tick people / Select all, one message, optional
+  time + length + place; sends privately to each person via `chooseChannel`. The invite card shows each
+  person's first reply after it went out (`repliesTo`). Confirm (there, or from `InviteBanner` in that
+  person's chat) → "tell the others" with an editable note → "Add to your calendar?" → Google Calendar
+  template link (ctz Europe/Vilnius) or an .ics (web only). Contact page has a Lists section.
+- Planned next: AI reply suggestions in his style (chips + ghost text) via the Claude API from a service
+  on sky — waiting for his OK on sending chat text to Anthropic, model choice (Opus 5.5 default vs
+  Haiku 5.5) and an `ANTHROPIC_API_KEY` in server/.env; then detecting meetings agreed in normal chats
+  to offer the calendar step.

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { go, back } from '../router.js'
 import { PEOPLE_TYPE } from '../matrix.js'
-import { linkRoom, unlinkRoom, setDefault, renamePerson, mergePeople, normName } from '../people.js'
+import { linkRoom, unlinkRoom, setDefault, renamePerson, mergePeople, normName, setAbout } from '../people.js'
 import { Avatar, NetBadge, TopBar, identityOf, timeShort } from './common.jsx'
 import { PhoneBookCard, ContactDetails } from './PhoneBook.jsx'
 import { ListMembership } from './Lists.jsx'
@@ -62,6 +62,7 @@ function Contact({ ctx, item }) {
         {err && <p className="error">{err}</p>}
 
         {item.kind === 'person' && <><h3 className="section">Name &amp; contacts</h3><ContactDetails ctx={ctx} item={item} /><PhoneBookCard ctx={ctx} item={item} /></>}
+        {item.kind === 'person' && <About client={client} item={item} save={save} cfg={cfg} />}
         {item.kind === 'person' && <><h3 className="section">Lists</h3><ListMembership ctx={ctx} item={item} /></>}
 
         <h3 className="section">Apps</h3>
@@ -111,5 +112,24 @@ function Contact({ ctx, item }) {
         ))}
       </div>
     </div>
+  )
+}
+
+// Who this person is to you, in a few words: the reply suggestions use it
+// ("partner, warm", "client, polite", "tennis buddy").
+function About({ item, save, cfg }) {
+  const current = (item.personId && cfg?.people?.[item.personId]?.about) || ''
+  const [v, setV] = useState(current)
+  useEffect(() => { if (document.activeElement?.getAttribute('aria-label') !== 'About') setV(current) }, [current])
+  const first = item.name.split(' ')[0]
+  return (
+    <>
+      <h3 className="section">About {first}</h3>
+      <div className="card about-card">
+        <textarea aria-label="About" rows={2} value={v} maxLength={300} placeholder={`e.g. partner · friend from tennis · client, polite`}
+          onChange={(e) => setV(e.target.value)} onBlur={() => { if (v.trim() !== current) save(setAbout(cfg, item, v)) }} />
+        <p className="hint">Helps the reply suggestions answer {first} the way you would.</p>
+      </div>
+    </>
   )
 }

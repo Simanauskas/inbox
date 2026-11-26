@@ -18,7 +18,7 @@ Suggestions go to room account data `fit.simas.inbox.suggest`
 Env: USER_ID, AS_TOKEN_FILE (double-puppet registration), HS, OLLAMA (http://ollama:11434),
 MODEL (gemma3:4b), EMBED_MODEL (bge-m3), STATE (/state).
 """
-import json, os, re, sqlite3, sys, time, urllib.error, urllib.parse, urllib.request
+import json, os, re, sqlite3, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 import numpy as np
 
 HS = os.environ.get("HS", "http://synapse:8008")
@@ -245,6 +245,75 @@ def recent(room, limit=12):
     return evs
 
 
+
+# --- Claude (his subscription, through Claude Code) -----------------------------------
+# Writes the suggestions when a long-lived token from `claude setup-token` is in .env
+# (SUGGEST_CLAUDE_TOKEN): far better Lithuanian than the small local model. The local
+# model stays as the fallback (no token, Claude unreachable or over the plan's limit).
+
+CLAUDE_DIR = os.environ.get("CLAUDE_DIR", "/opt/claude")  # the host's Claude Code versions, mounted
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "sonnet")
+PEOPLE = "fit.simas.inbox.people"
+_people = {"at": 0, "cfg": {}}
+
+
+def claude_bin():
+    try:
+        versions = sorted(os.listdir(CLAUDE_DIR), key=lambda v: [int(x) if x.isdigit() else 0 for x in re.split(r"[.-]", v)])
+        return os.path.join(CLAUDE_DIR, versions[-1]) if versions else None
+    except OSError:
+        return None
+
+
+def use_claude():
+    return bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")) and claude_bin() is not None
+
+
+def claude(system, user, timeout=60):
+    env = {"PATH": "/usr/bin:/bin", "HOME": "/tmp/claude-home", "DISABLE_AUTOUPDATER": "1",
+           "CLAUDE_CODE_OAUTH_TOKEN": os.environ["CLAUDE_CODE_OAUTH_TOKEN"]}
+    r = subprocess.run([claude_bin(), "-p", "--model", CLAUDE_MODEL, "--tools", "", "--no-session-persistence",
+                        "--system-prompt", system], input=user, capture_output=True, text=True, timeout=timeout, env=env)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or r.stdout or "claude failed").strip()[:200])
+    m = re.search(r"\{.*\}", r.stdout, re.S)
+    return json.loads(m.group(0)) if m else {}
+
+
+def person_note(room):
+    """What he wrote about this person in Inbox (contact page → "About"), for the suggestions."""
+    if time.time() - _people["at"] > 60:
+        try:
+            _people["cfg"] = matrix("GET", f"/_matrix/client/v3/user/{q(USER)}/account_data/{PEOPLE}")
+        except Exception:
+            pass
+        _people["at"] = time.time()
+    for p in (_people["cfg"].get("people") or {}).values():
+        if room in (p.get("rooms") or []):
+            return (p.get("name") or "").split(" ")[0] or None, (p.get("about") or "").strip()[:300]
+    return None, ""
+
+
+def suggest_claude(room, convo, examples):
+    first, about = person_note(room)
+    name = first or room_name(room)
+    lines = [f"{'Simas' if e['sender'] == USER else name}: {clean(e['content']['body'])[:300]}" for e in convo[-12:]]
+    ex = "\n".join(f"{name}: {t[:150]}\nSimas: {m[:120]}" for _, t, m in examples[:4])
+    system = (
+        "You suggest replies Simas could send next in a private chat. Write exactly like him.\n\n"
+        f"How Simas writes:\n{style()}\n\n"
+        + (f"About {name}: {about}\n\n" if about else "")
+        + (f"Some of his real past replies to similar messages (for tone; reuse one only if it truly fits):\n{ex}\n\n" if ex else "")
+        + f"Understand what {name}'s last message means and what they would want back, then write three different replies:\n"
+        "1. a natural, direct response to it\n2. a relevant follow-up question\n3. an offer to do something, or a next step\n"
+        "Use the conversation's language. Keep them as short as Simas writes. Don't repeat what Simas already said, "
+        "and never invent facts (times, places, prices, plans) that aren't in the conversation.\n"
+        'Output only JSON: {"replies": ["...", "...", "..."]}'
+    )
+    out = claude(system, "Conversation (oldest first):\n" + "\n".join(lines))
+    return [x.strip() for x in out.get("replies", []) if isinstance(x, str) and x.strip()][:3]
+
+
 def suggest(mem, room, ev):
     convo = recent(room)
     their = clean(ev["content"]["body"])
@@ -256,6 +325,15 @@ def suggest(mem, room, ev):
     # examples in the same language as their message, so the model answers in that language
     same = [x for x in examples if looks_english(x[1]) == english]
     examples = (same or examples)[:6]
+    if use_claude():
+        t = time.time()
+        try:
+            replies = [x for x in dict.fromkeys(suggest_claude(room, convo, examples)) if not SENSITIVE.search(x)][:3]
+            if replies:
+                log(f"suggested with Claude in {time.time() - t:.0f}s for {room[:10]}: {len(replies)} replies")
+                return replies
+        except Exception as e:
+            log(f"Claude unavailable ({str(e)[:120]}), using the local model")
     lines = [f"{'Simas' if e['sender'] == USER else 'Them'}: {clean(e['content']['body'])[:200]}" for e in convo[-8:]]
     ex = "\n".join(f"Them: {t[:150]}\nSimas: {m[:120]}" for _, t, m in examples[:5])
     lang = "English" if english else "Lithuanian (usually without diacritics, as he writes)"

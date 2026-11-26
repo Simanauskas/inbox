@@ -388,6 +388,15 @@ export function setDefault(rawConfig, item, roomId) {
   return config
 }
 
+// A note about this person for the reply suggestions ("partner", "tennis buddy, formal")
+export function setAbout(rawConfig, item, about) {
+  const { config, personId } = ensurePerson(rawConfig, item)
+  const t = about.trim().slice(0, 300)
+  if (t) config.people[personId].about = t
+  else delete config.people[personId].about
+  return config
+}
+
 export function renamePerson(rawConfig, item, name) {
   const { config, personId } = ensurePerson(rawConfig, item)
   config.people[personId].name = name

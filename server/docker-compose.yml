@@ -126,8 +126,13 @@ services:
       MODEL: ${SUGGEST_MODEL:-gemma3:4b}
       EMBED_MODEL: ${SUGGEST_EMBED_MODEL:-bge-m3}
       SELF_NAMES: ${SUGGEST_SELF_NAMES:-}   # his own name(s): his chat with himself is never learned from
+      # Claude writes the suggestions on his subscription: token from `claude setup-token`
+      CLAUDE_CODE_OAUTH_TOKEN: ${SUGGEST_CLAUDE_TOKEN:-}
+      CLAUDE_MODEL: ${SUGGEST_CLAUDE_MODEL:-sonnet}
     volumes:
       - ./suggest/suggest.py:/app/suggest.py:ro
+      # the server's own Claude Code install (curl -fsSL https://claude.ai/install.sh | bash)
+      - ${CLAUDE_VERSIONS_DIR:-/root/.local/share/claude/versions}:/opt/claude:ro
       - ./data/synapse/doublepuppet.yaml:/app/doublepuppet.yaml:ro
       - ./data/suggest:/state
     depends_on:

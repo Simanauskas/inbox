@@ -289,3 +289,10 @@ these images. Details and gotchas: `references/server.md`.
   override "don't notify" rule `fit.simas.inbox.active.<roomId>` while any device's `until` is in
   the future, so no device buzzes for the chat he's typing in, and drops it when renewals stop
   (idle 1 min, left the chat, Mac asleep). mutedRoomIds ignores these rules.
+- Reply suggestions are written by Claude on his subscription (his choice, 26 Nov 2026; the chat's
+  last ~12 messages go to Anthropic): suggest.py runs the server's Claude Code binary (host
+  ~/.local/share/claude/versions mounted at /opt/claude) as `claude -p --model sonnet --tools ""
+  --system-prompt …` with CLAUDE_CODE_OAUTH_TOKEN = SUGGEST_CLAUDE_TOKEN from `claude setup-token`.
+  Prompt = style.md + the person's "About" note (contact page, people[pid].about) + a few past
+  replies; three purposes (respond / follow-up question / offer). Falls back to gemma3:4b when there's
+  no token or Claude fails. Plan detection still uses the local model.

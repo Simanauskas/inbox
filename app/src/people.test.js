@@ -360,3 +360,16 @@ test('lists and invites: members survive combining, replies, calendar links', as
   assert.match(c.ics, /DTSTART;TZID=Europe\/Vilnius:20261125T140000\r\nDTEND;TZID=Europe\/Vilnius:20261125T153000/)
   assert.equal(L.calendarLinks({ title: 'x', when: '' }), null)
 })
+
+test('editing: only your own text messages, where the app allows it, within its time limit', async () => {
+  const { canEdit } = await import('./people.js')
+  const t = Date.now()
+  const mineMsg = { event_id: '$e1', type: 'm.room.message', sender: ME, origin_server_ts: t - 60_000, content: { msgtype: 'm.text', body: 'hi' } }
+  const wa = { features: { edit: 2, edit_max_age: 900 } }
+  assert.equal(canEdit(wa, mineMsg, ME, t), true)
+  assert.equal(canEdit(wa, { ...mineMsg, origin_server_ts: t - 16 * 60_000 }, ME, t), false) // older than 15 min
+  assert.equal(canEdit({ features: { edit: 2 } }, { ...mineMsg, origin_server_ts: t - 86400_000 }, ME, t), true) // Telegram: no limit
+  assert.equal(canEdit({ features: null }, mineMsg, ME, t), false) // iMessage
+  assert.equal(canEdit(wa, { ...mineMsg, sender: '@whatsapp_1:x' }, ME, t), false)
+  assert.equal(canEdit(wa, { ...mineMsg, content: { msgtype: 'm.image', body: 'a.jpg' } }, ME, t), false)
+})

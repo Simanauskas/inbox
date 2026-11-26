@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { isNative, pickPhotos, openExternal } from '../native.js'
 import { callOptions } from '../calls.js'
 import { go, back } from '../router.js'
-import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig } from '../people.js'
+import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig, canEdit } from '../people.js'
 import { networkInfo } from '../networks.js'
 import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
 import { ContactPrompt } from './PhoneBook.jsx'
@@ -27,6 +27,7 @@ export default function Thread({ ctx, item }) {
   const atBottom = useRef(true)
   const [loading, setLoading] = useState(false)
   const [replyTo, setReplyTo] = useState(null) // { ev, roomId }
+  const [editing, setEditing] = useState(null) // { ev, roomId }: your message being edited
   const [active, setActive] = useState(null) // event id with open action bar
   const [picker, setPicker] = useState(null) // { ev, roomId } for the "+" emoji panel
   const quick = quickReactions(normConfig(client.accountData[PEOPLE_TYPE]))
@@ -81,6 +82,10 @@ export default function Thread({ ctx, item }) {
   useEffect(() => {
     if (isLooking()) for (const id of item.rooms) if (rooms[id]) client.markRead(id)
   }, [ctx.version, item.key])
+
+  useEffect(() => { for (const id of item.rooms) client.loadFeatures(id) }, [roomsKey])
+  // your newest message you can still edit (↑ in an empty box on the Mac)
+  const lastEditable = () => { for (let i = entries.length - 1; i >= 0; i--) { const en = entries[i]; if (en.ev.sender === me && !en.ev.local) return canEdit(rooms[en.roomId], en.ev, me) ? en : null } return null }
 
   // refresh "2h ago" labels
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 60000); return () => clearInterval(t) }, [])
@@ -167,7 +172,8 @@ export default function Thread({ ctx, item }) {
                 seenHere={en.ev.event_id === lastSeenId}
                 open={active === en.ev.event_id}
                 onOpen={() => setActive(en.ev.event_id)}
-                onReply={() => { setReplyTo(en); setActive(null) }}
+                onReply={() => { setReplyTo(en); setEditing(null); setActive(null) }}
+                onEdit={canEdit(rooms[en.roomId], en.ev, me) ? () => { setEditing(en); setReplyTo(null); setActive(null) } : null}
                 quick={quick}
                 onReact={(k) => { client.react(en.roomId, en.ev.event_id, k).catch(() => {}); setActive(null) }}
                 onMore={() => { setPicker(en); setActive(null) }}
@@ -183,6 +189,7 @@ export default function Thread({ ctx, item }) {
       )}
       <Composer
         ctx={ctx} target={target} replyTo={replyTo}
+        editing={editing} onEdit={(en) => { setEditing(en); setReplyTo(null) }} onCancelEdit={() => setEditing(null)} lastEditable={lastEditable}
         onClearReply={() => setReplyTo(null)}
         onSent={() => { setReplyTo(null); atBottom.current = true }}
       />
@@ -229,7 +236,7 @@ function useLongPress(onLong, ms = 420) {
   }
 }
 
-function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status, seenHere, open, onOpen, onReply, onReact, onMore, quick }) {
+function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status, seenHere, open, onOpen, onReply, onEdit, onReact, onMore, quick }) {
   const { client, model } = ctx
   const press = useLongPress(onOpen)
   const box = useRef(null)
@@ -275,6 +282,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
           {quick.map((k) => <button key={k} onClick={() => onReact(k)}>{k}</button>)}
           <button className="more" onClick={onMore} aria-label="More emojis">＋</button>
           <button onClick={onReply} aria-label="Reply"><Icon name="reply" size={18} /></button>
+          {onEdit && <button onClick={onEdit} aria-label="Edit"><Icon name="edit" size={18} /></button>}
           {c.body && <button onClick={() => navigator.clipboard?.writeText(stripReply(c.body))}>Copy</button>}
         </div>
       )}
@@ -440,7 +448,7 @@ export function suggestionsFor(room, me) {
   return s.replies
 }
 
-function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
+function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEditable, onClearReply, onSent }) {
   const { client, model } = ctx
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
@@ -459,6 +467,16 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   })
   const canRecord = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
 
+  // editing: the message goes into the box; Enter saves, Esc (or ✕) cancels
+  const editKey = editing?.ev.event_id
+  useEffect(() => {
+    if (!editing) return
+    const t = stripReply(editing.ev.content?.body || '')
+    setText(t)
+    setTimeout(() => { const el = area.current; if (el) { el.focus(); el.setSelectionRange(t.length, t.length) } }, 0)
+  }, [editKey])
+  function cancelEdit() { onCancelEdit(); setText('') }
+
   useEffect(() => {
     const el = area.current
     if (!el) return
@@ -474,6 +492,13 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   async function send() {
     const body = text.trim()
     if (pending.length) return sendPending(body)
+    if (editing) {
+      const { ev, roomId } = editing
+      cancelEdit()
+      if (!body || body === stripReply(ev.content?.body || '')) return
+      try { await client.edit(roomId, ev.event_id, body) } catch (e) { setErr(`Couldn't edit: ${e.message}`) }
+      return
+    }
     if (!body) return
     setText('')
     setErr(null)
@@ -553,6 +578,13 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
   const color = { '--net': networkInfo(net).color }
   return (
     <div className="composer">
+      {editing && (
+        <div className="reply-bar edit-bar">
+          <Icon name="edit" size={16} />
+          <span>Editing: {previewText(editing.ev, client.userId).replace(/^You: /, '')}</span>
+          <button className="icon-btn" onClick={cancelEdit} aria-label="Cancel editing"><Icon name="close" size={16} /></button>
+        </div>
+      )}
       {replyTo && (
         <div className="reply-bar">
           <Icon name="reply" size={16} />
@@ -561,7 +593,7 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
         </div>
       )}
       {err && <div className="error small">{err}</div>}
-      {!text && !pending.length && !voice.rec && suggested.length > 0 && (
+      {!text && !editing && !pending.length && !voice.rec && suggested.length > 0 && (
         <div className="suggestions" aria-label="Suggested replies">
           {suggested.map((s) => <button key={s} className="suggestion" onClick={() => useSuggestion(s)}>{s}</button>)}
         </div>
@@ -599,10 +631,13 @@ function Composer({ ctx, target, replyTo, onClearReply, onSent }) {
           <input ref={cameraInput} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFiles} />
           <textarea
             ref={area} rows={1} value={text} onChange={onChange} onPaste={onPaste}
-            placeholder={pending.length ? 'Add a caption…' : suggested[0] && !matchMedia('(pointer: coarse)').matches ? `${suggested[0]}   ⇥ Tab` : `Message on ${networkInfo(net).name}`}
+            placeholder={editing ? 'Edit your message' : pending.length ? 'Add a caption…' : suggested[0] && !matchMedia('(pointer: coarse)').matches ? `${suggested[0]}   ⇥ Tab` : `Message on ${networkInfo(net).name}`}
             onKeyDown={(e) => {
               // Tab on an empty box takes the first suggestion (like code completion)
-              if (e.key === 'Tab' && !e.shiftKey && !text && suggested[0]) { e.preventDefault(); useSuggestion(suggested[0]); return }
+              if (e.key === 'Tab' && !e.shiftKey && !text && suggested[0] && !editing) { e.preventDefault(); useSuggestion(suggested[0]); return }
+              // ↑ in an empty box: edit your last message (like Slack / Telegram desktop)
+              if (e.key === 'ArrowUp' && !text && !pending.length && !editing) { const en = lastEditable(); if (en) { e.preventDefault(); onEdit(en) } return }
+              if (e.key === 'Escape' && editing) { e.preventDefault(); cancelEdit(); return }
               if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send() }
             }}
           />

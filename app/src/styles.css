@@ -480,3 +480,7 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 .learned p { margin: 0; }
 .learned .tag { margin-right: 6px; }
 .learned .hint { margin-top: 6px; }
+.edit-bar { color: var(--accent); }
+/* the bar never runs off the screen: on a narrow phone the buttons get tighter */
+.actions.above, .actions.below { max-width: calc(100vw - 24px); }
+@media (max-width: 480px) { .actions button { padding: 4px 5px; } .actions { gap: 0; } }

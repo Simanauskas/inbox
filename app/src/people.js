@@ -508,6 +508,19 @@ function applyEdits(ev, { edits }) {
   return { ...ev, content: { ...ed.content['m.new_content'], 'm.relates_to': ev.content['m.relates_to'] }, edited: true }
 }
 
+// Can you still edit this message of yours? The bridges say what the app allows
+// (com.beeper.room_features: WhatsApp/Messenger/Instagram 15 min, Telegram any time;
+// iMessage/SMS don't say, so no).
+export function canEdit(room, ev, me, now = Date.now()) {
+  if (!room || !ev || ev.sender !== me || ev.local || ev.type !== 'm.room.message') return false
+  if (ev.redacted || ev.unsigned?.redacted_because) return false
+  if (ev.content?.msgtype !== 'm.text') return false
+  const f = room.features
+  if (!f || !(f.edit > 0)) return false
+  if (f.edit_max_age && now - ev.origin_server_ts > f.edit_max_age * 1000) return false
+  return true
+}
+
 export function previewText(ev, me, room = null, group = false) {
   if (!ev) return ''
   if (ev.type === 'm.reaction') {

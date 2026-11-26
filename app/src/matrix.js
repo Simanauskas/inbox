@@ -206,7 +206,7 @@ export class Client {
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
         heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount, unreadCount: room.unreadCount || 0,
-        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null, topic: room.topic || null, power: room.power || null,
+        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null, topic: room.topic || null, power: room.power || null, features: room.features ?? null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
         // without one, the next "load older" starts from the newest and skips what it has
@@ -281,6 +281,7 @@ export class Client {
       case 'm.room.name': room.name = c.name || null; break
       case 'm.room.avatar': room.avatarUrl = c.url || null; break
       case 'm.room.topic': room.topic = c.topic || null; break
+      case 'com.beeper.room_features': room.features = c; break
       case 'm.room.power_levels': room.power = { users: c.users || {}, users_default: c.users_default, invite: c.invite, kick: c.kick, events: c.events || {}, state_default: c.state_default }; break
       case 'm.room.create': room.createTs = ev.origin_server_ts || 0; room.roomType = c.type || null; break
       case 'm.bridge':
@@ -365,6 +366,23 @@ export class Client {
       } catch {}
     }
     this.emit()
+  }
+
+  // What the app allows in this chat (editing etc.), for rooms cached before we kept it.
+  async loadFeatures(roomId) {
+    const room = this.rooms[roomId]
+    if (!room || room.features !== undefined && room.features !== null || room.featuresTried) return
+    room.featuresTried = true
+    try { room.features = await this.api('GET', `/_matrix/client/v3/rooms/${enc(roomId)}/state/com.beeper.room_features`); this.emit() } catch { room.features = null }
+  }
+
+  // Edit one of your messages (the bridge changes it in the app too).
+  edit(roomId, eventId, body) {
+    return this.send(roomId, {
+      msgtype: 'm.text', body: `* ${body}`,
+      'm.new_content': { msgtype: 'm.text', body },
+      'm.relates_to': { rel_type: 'm.replace', event_id: eventId },
+    })
   }
 
   // --- groups: the bridge carries these to the app (add / remove people, rename, leave) ---

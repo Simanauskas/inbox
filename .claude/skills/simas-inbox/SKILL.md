@@ -307,3 +307,8 @@ these images. Details and gotchas: `references/server.md`.
   `fit.simas.inbox.profiles` {rooms: {roomId: …}}, refreshed after 30 days. Suggestions use his own
   About note, else the learned one. Contact page shows it. Categories (for grouping later):
   partner, family, close friend, friend, tennis, sport, work, client, service, other.
+- Editing your messages: ↑ in an empty composer (desktop) or long-press → ✏️ (phone); Enter saves,
+  Esc cancels. Sent as m.replace with m.new_content (client.edit). Offered only where the bridge's
+  `com.beeper.room_features` allows (edit > 0, edit_max_age: WhatsApp/Messenger/Instagram 900 s,
+  Telegram none); iMessage/SMS have no features event → no edit. `canEdit` in people.js;
+  room.features from state (client.loadFeatures for rooms cached before).

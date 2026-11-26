@@ -212,6 +212,19 @@ export VAPID_PUBLIC_KEY
 PUSH_CONTACT_EMAIL=${PUSH_CONTACT_EMAIL:-push@$SERVER_NAME}
 extra_endpoint=""
 [ -n "${PUSH_EXTRA_ENDPOINT:-}" ] && extra_endpoint="      - \"$PUSH_EXTRA_ENDPOINT\""
+# The iPhone app's notifications go through Apple: needs the APNs key (.p8) at
+# data/sygnal/apns.p8 and APNS_KEY_ID / APNS_TEAM_ID in .env.
+ios_app=""
+if [ -f "$DATA/sygnal/apns.p8" ] && [ -n "${APNS_KEY_ID:-}" ] && [ -n "${APNS_TEAM_ID:-}" ]; then
+  ios_app="  ${APNS_APP_ID:-fit.simas.inbox.ios}:
+    type: inbox_apns.InboxApnsPushkin
+    keyfile: /data/apns.p8
+    key_id: \"$APNS_KEY_ID\"
+    team_id: \"$APNS_TEAM_ID\"
+    topic: \"${APNS_TOPIC:-fit.simas.inbox}\"
+    platform: production
+    push_type: alert"
+fi
 inside 'cat > /data/sygnal/sygnal.yaml' <<SYGNAL
 log:
   setup:
@@ -236,6 +249,7 @@ apps:
       - "updates.push.services.mozilla.com"
       - "*.notify.windows.com"
 $extra_endpoint
+$ios_app
 SYGNAL
 
 say "Configuring Synapse"

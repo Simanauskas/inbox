@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react'
 import { Client, PEOPLE_TYPE } from './matrix.js'
-import { lockEnabled, unlock, onResume, isNative } from './native.js'
+import { lockEnabled, unlock, onResume, isNative, startNativePush, clearNativeNotifications } from './native.js'
 import { buildModel, suggestions, previewText, autoMerges, applyAutoMerges } from './people.js'
 import { networkInfo } from './networks.js'
 import Login from './ui/Login.jsx'
@@ -164,7 +164,9 @@ function Main({ session, onLogout }) {
     // clear notifications for what you've read, and open the chat a notification was for
     saveSessionForWorker(session)
     syncPush(client)
-    client.onRead = (roomId) => closeNotifications([roomId])
+    client.onRead = (roomId) => { closeNotifications([roomId]); clearNativeNotifications([roomId]) }
+    // iPhone app: notifications through Apple (asks once), tap one to open the chat
+    startNativePush(client, { onOpen: openFromNotification }).catch(() => {})
     const onSwMessage = (e) => { if (e.data?.type === 'open' && e.data.hash) openFromNotification(e.data.hash) }
     navigator.serviceWorker?.addEventListener('message', onSwMessage)
     // a notification tapped while the app was closed or asleep

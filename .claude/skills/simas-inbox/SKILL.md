@@ -258,3 +258,16 @@ these images. Details and gotchas: `references/server.md`.
   device only. Old rules are removed on start (`dropOpenChatRules`).
 - The TestFlight app has no push of its own (APNs not built); phone notifications come from the
   home-screen web app's subscription.
+
+## iPhone app notifications (APNs, 26 Nov 2026)
+- App: `@capacitor/push-notifications` 8.1.3; `startNativePush` (native.js) asks once, registers with
+  Apple on every start, sets pusher app_id `fit.simas.inbox.ios` (pushkey = base64 of the token,
+  gateway http://sygnal:5000/...), removes the old Home Screen web-app pusher named "iPhone".
+  Tap → `room_id` → opens the chat. Read → `clearNativeNotifications`. In the foreground only the
+  badge updates (capacitor.config presentationOptions ['badge']). AppDelegate forwards the token.
+- Entitlement `aps-environment: production` in App/App.entitlements. The archive is unsigned, so
+  the workflow ad-hoc signs it with the entitlements before the App Store export re-signs it.
+- Server: `server/sygnal/inbox_apns.py` (custom Sygnal pushkin, mounted with PYTHONPATH) writes
+  plain alerts: title = sender (· group), body like the web ones, thread-id = room, badge = unread.
+  setup.sh adds the app to sygnal.yaml when data/sygnal/apns.p8 exists and APNS_KEY_ID /
+  APNS_TEAM_ID are in .env (Team ID is Ilona's team). TestFlight uses the production APNs.

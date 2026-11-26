@@ -142,8 +142,11 @@ services:
     restart: unless-stopped
     environment:
       SYGNAL_CONF: /data/sygnal.yaml
+      PYTHONPATH: /inbox-sygnal
     volumes:
       - ./data/sygnal:/data
+      # how the iPhone app's notifications look (sent through Apple)
+      - ./sygnal/inbox_apns.py:/inbox-sygnal/inbox_apns.py:ro
 
   # Publishes Synapse at https://<MATRIX_HOST> without opening any ports.
   cloudflared:

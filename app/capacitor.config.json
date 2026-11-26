@@ -12,6 +12,11 @@
     "Keyboard": {
       "resize": "none",
       "resizeOnFullScreen": false
+    },
+    "PushNotifications": {
+      "presentationOptions": [
+        "badge"
+      ]
     }
   }
 }

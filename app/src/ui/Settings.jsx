@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { isNative, lockEnabled, setLockEnabled, biometryName, unlock } from '../native.js'
+import { isNative, lockEnabled, setLockEnabled, biometryName, unlock, nativePushState, startNativePush, openExternal, pushError } from '../native.js'
 import { go, back } from '../router.js'
 import { PEOPLE_TYPE } from '../matrix.js'
 import { normConfig } from '../people.js'
@@ -22,6 +22,27 @@ function Reactions({ client, cfg }) {
         <button className="text-btn" onClick={() => { setText(DEFAULT_REACTIONS.join('')); save(DEFAULT_REACTIONS) }}>Reset</button>
         <button className="primary" disabled={!changed || !picked.length} onClick={() => save(picked)}>Save</button>
       </div>
+    </div>
+  )
+}
+
+function NativeNotifications({ client }) {
+  const [state, setState] = useState(null)
+  const refresh = () => nativePushState().then(setState)
+  useEffect(() => { refresh() }, [])
+  if (state === null) return <div className="card"><span className="spinner small" /></div>
+  return (
+    <div className="card">
+      {state === 'on' && !pushError && <p>✓ On. New messages show on your iPhone even when Inbox is closed. You can mute a chat to silence it.</p>}
+      {state === 'on' && pushError && <p className="error">Allowed, but Apple didn't register this iPhone: {pushError}</p>}
+      {state === 'off' && <>
+        <p>Get notified of new messages even when Inbox is closed.</p>
+        <button className="wide-btn" onClick={() => startNativePush(client).then(refresh)}>Turn on notifications</button>
+      </>}
+      {state === 'denied' && <>
+        <p>Notifications are off for Inbox. Turn them on in the iPhone's Settings → Inbox → Notifications.</p>
+        <button className="wide-btn" onClick={() => openExternal('app-settings:')}>Open Settings</button>
+      </>}
     </div>
   )
 }
@@ -114,7 +135,7 @@ export default function Settings({ ctx }) {
         <Reactions client={client} cfg={cfg} />
 
         <h3 className="section">Notifications</h3>
-        {isNative ? <p className="hint">Notifications in the iPhone app come in the next update. Until then, keep the Home Screen version for notifications.</p> : <Notifications client={client} />}
+        {isNative ? <NativeNotifications client={client} /> : <Notifications client={client} />}
 
         {isNative && <><h3 className="section">Privacy</h3><LockSetting /></>}
 

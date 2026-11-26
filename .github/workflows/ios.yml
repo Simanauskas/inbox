@@ -60,6 +60,18 @@ jobs:
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" MARKETING_VERSION=1.0 \
             archive
 
+      # The archive is unsigned, so it carries no entitlements; export signing keeps the
+      # ones it finds. Sign it locally (ad hoc) with ours so push notifications
+      # (aps-environment) make it into the App Store build.
+      - name: Add entitlements (push notifications)
+        run: |
+          APP="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app"
+          if [ -d "$APP/Frameworks" ]; then
+            for f in "$APP"/Frameworks/*; do codesign --force --sign - "$f"; done
+          fi
+          codesign --force --sign - --entitlements app/ios/App/App/App.entitlements "$APP"
+          codesign -d --entitlements - "$APP"
+
       - name: Sign for the App Store and upload to TestFlight
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
@@ -79,6 +91,14 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
             -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
             -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+
+      - name: Check the build can get notifications
+        run: |
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa 2>/dev/null | head -1)
+          if [ -z "$IPA" ]; then echo "No .ipa kept after upload; skipping the check"; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/ipa" && unzip -q -o "$IPA" -d "$RUNNER_TEMP/ipa"
+          codesign -d --entitlements - "$RUNNER_TEMP"/ipa/Payload/*.app 2>&1 | tee "$RUNNER_TEMP/ent.txt"
+          grep -q aps-environment "$RUNNER_TEMP/ent.txt" || { echo "::error::The signed app has no push entitlement"; exit 1; }
 
       - name: Remove the key
         if: always()

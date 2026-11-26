@@ -103,3 +103,68 @@ export async function addToAppleCalendar({ title, start, end, place, notes }) {
   })
   return true
 }
+
+// --- Notifications (Apple push) ---
+// The iPhone gives the app a device token; the server (Sygnal) sends notifications to it
+// through Apple. Pusher app id must match the "fit.simas.inbox.ios" app in sygnal.yaml.
+export const IOS_PUSH_APP_ID = 'fit.simas.inbox.ios'
+const GATEWAY_URL = 'http://sygnal:5000/_matrix/push/v1/notify'
+const hexToB64 = (hex) => btoa(String.fromCharCode(...(hex.match(/../g) || []).map((h) => parseInt(h, 16))))
+
+// 'on' | 'off' (not asked yet) | 'denied' | null (not the iPhone app)
+export async function nativePushState() {
+  if (!isNative) return null
+  const { PushNotifications } = await import('@capacitor/push-notifications')
+  const { receive } = await PushNotifications.checkPermissions()
+  return receive === 'granted' ? 'on' : receive === 'denied' ? 'denied' : 'off'
+}
+
+let pushStarted = false
+export let pushError = null // why Apple refused to register, if it did
+// Ask once (iOS shows its own prompt), then register with Apple on every start so the
+// server always has the current token. Tapping a notification opens that chat.
+export async function startNativePush(client, { ask = true, onOpen } = {}) {
+  if (!isNative) return
+  const { PushNotifications } = await import('@capacitor/push-notifications')
+  if (!pushStarted) {
+    pushStarted = true
+    PushNotifications.addListener('registration', async ({ value }) => {
+      const pushkey = hexToB64(value)
+      try {
+        await client.setPusher({
+          kind: 'http', app_id: IOS_PUSH_APP_ID, pushkey, app_display_name: 'Inbox', device_display_name: 'iPhone app',
+          lang: navigator.language || 'en', data: { url: GATEWAY_URL },
+        })
+        // the Home Screen web app on this phone would notify a second time
+        const { pushers = [] } = await client.api('GET', '/_matrix/client/v3/pushers')
+        for (const p of pushers) {
+          if (p.app_id !== IOS_PUSH_APP_ID && p.device_display_name === 'iPhone') {
+            await client.setPusher({ kind: null, app_id: p.app_id, pushkey: p.pushkey }).catch(() => {})
+          }
+        }
+        // the bridges invite you to a new room for every chat they import; don't notify for those
+        await client.setPushRuleEnabled('override', '.m.rule.invite_for_me', false).catch(() => {})
+      } catch {}
+    })
+    PushNotifications.addListener('registrationError', ({ error }) => { pushError = String(error || 'unknown error') })
+    PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
+      const roomId = notification?.data?.room_id
+      if (roomId) onOpen?.(`#/t/${encodeURIComponent('r:' + roomId)}`)
+    })
+  }
+  let { receive } = await PushNotifications.checkPermissions()
+  if (receive !== 'granted' && receive !== 'denied' && ask) receive = (await PushNotifications.requestPermissions()).receive
+  if (receive === 'granted') await PushNotifications.register()
+  return receive
+}
+
+// Clear a chat's notifications from the lock screen once you've read it.
+export async function clearNativeNotifications(roomIds) {
+  if (!isNative) return
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications')
+    const { notifications } = await PushNotifications.getDeliveredNotifications()
+    const gone = notifications.filter((n) => roomIds.includes(n.data?.room_id))
+    if (gone.length) await PushNotifications.removeDeliveredNotifications({ notifications: gone })
+  } catch {}
+}

@@ -355,3 +355,9 @@ Not done: GIF/sticker picker, view-once media, starring messages.
 - Ticks: ✓ server, ✓✓ delivered, cyan/blue ✓✓ seen — no "Seen" text. Message menu sized for
   fingers with labelled tools. Inbox filters: row 1 All · Unread · Groups · Lists · Archived,
   row 2 the apps. Touch: tap outside a field closes the keyboard (tapToDismissKeyboard).
+- Missing chats / history (26 Nov): bridge commands go to the bot's management room (e.g.
+  @facebookbot, @telegrambot; scratchpad helper sent `search <name>`, `start-chat <id>`).
+  Messenger chats switched to encryption ("e2ee_cutover") may have no fetchable history even with
+  the backup PIN entered. Telegram created only 15 chats (network.sync.create_limit 15): now
+  update_limit 300 / create_limit 200 (setup.sh); to re-run its chat sync, set user_login
+  metadata `takeout_portal_crawl_done` to false in the telegram DB and restart the bridge.

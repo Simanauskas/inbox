@@ -348,3 +348,4 @@ Not done: GIF/sticker picker, view-once media, starring messages.
   resized the chat = the "jerk"). useMedia starts from client.mediaCached (no photo flash).
   Photos open in a full-screen Viewer (pinch / double-tap zoom, drag, swipe down to close).
 - Suggestions always in correct Lithuanian WITH diacritics (or English), even though he types without.
+- No content-visibility on inbox rows (Safari left them blank once the inbox sat under a page). Thread keeps the newest message in view on resize (ResizeObserver; keyboard).

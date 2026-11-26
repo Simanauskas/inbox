@@ -408,7 +408,7 @@ li:last-child .row-main { border-bottom: 0; }
 .swipe-actions { width: 252px; }
 .swipe-btn.mute { background: #ff9500; }
 /* long lists: skip drawing rows that are off screen (smoother scrolling) */
-.list > li { content-visibility: auto; contain-intrinsic-size: auto 72px; }
+/* (no content-visibility here: Safari left rows blank after the inbox was covered by a page) */
 /* iPhone app: leave room for the keyboard (the app itself keeps its full size behind it) */
 .app { height: calc(100% - var(--kb, 0px)); }
 /* no browser back/forward on a sideways two-finger swipe (those showed black pages) */

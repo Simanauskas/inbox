@@ -66,6 +66,17 @@ export default function Thread({ ctx, item }) {
     const el = scroller.current
     if (el && atBottom.current) el.scrollTop = el.scrollHeight
   })
+  // ...and when the chat area changes size (the keyboard opening or closing, a photo
+  // loading): keep the newest message in view if you were at the bottom
+  useEffect(() => {
+    const el = scroller.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const stick = () => { if (atBottom.current) el.scrollTop = el.scrollHeight }
+    const ro = new ResizeObserver(stick)
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => ro.disconnect()
+  }, [])
 
   // Read receipts only while you're actually looking: the window in front AND you've
   // touched the mouse/keyboard in the last minute. On the Mac the Inbox window stays

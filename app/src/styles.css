@@ -484,3 +484,48 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 /* the bar never runs off the screen: on a narrow phone the buttons get tighter */
 .actions.above, .actions.below { max-width: calc(100vw - 24px); }
 @media (max-width: 480px) { .actions button { padding: 4px 5px; } .actions { gap: 0; } }
+
+/* message menu: emojis on top, tools below */
+.actions { flex-direction: column; align-items: stretch; border-radius: 18px; gap: 2px; }
+.act-row { display: flex; gap: 2px; justify-content: space-between; }
+.act-row.tools { border-top: 1px solid var(--line); padding-top: 2px; justify-content: space-around; }
+.act-row.tools button { color: var(--text); font-size: 13px; }
+.act-row.tools button.danger { color: var(--danger); }
+.actions button:last-child { font-size: inherit; }
+.act-row .more { font-size: 18px; }
+
+/* formatting */
+.rich b, .rich strong { font-weight: 650; }
+.rich code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: color-mix(in srgb, currentColor 12%, transparent); padding: 0 4px; border-radius: 4px; }
+.rich pre { white-space: pre-wrap; margin: 4px 0; background: color-mix(in srgb, currentColor 10%, transparent); padding: 6px 8px; border-radius: 8px; }
+.rich pre code { background: none; padding: 0; }
+.rich blockquote { margin: 2px 0; padding-left: 8px; border-left: 3px solid color-mix(in srgb, currentColor 40%, transparent); opacity: 0.9; }
+.rich ul, .rich ol { margin: 2px 0; padding-left: 20px; }
+.rich p { margin: 0 0 4px; }
+.rich a { color: inherit; text-decoration: underline; }
+.mention { font-weight: 600; color: var(--accent); }
+.msg.out .mention { color: inherit; text-decoration: underline; }
+
+/* @ suggestions and the + menu */
+.mention-list, .attach-menu { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px 6px 6px; }
+.mention-list button, .attach-menu button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; background: var(--surface-2, var(--bg)); color: var(--text); font: inherit; font-size: 14px; border: 1px solid var(--line); }
+
+/* polls */
+.poll { min-width: 220px; display: flex; flex-direction: column; gap: 6px; }
+.poll-q { font-weight: 650; }
+.poll-a { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); background: none; color: inherit; font: inherit; text-align: left; overflow: hidden; }
+.poll-a:disabled { cursor: default; opacity: 1; }
+.poll-a.on { border-color: currentColor; }
+.poll-bar { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, currentColor 14%, transparent); }
+.poll-check { width: 14px; position: relative; font-weight: 700; }
+.poll-text { flex: 1; position: relative; }
+.poll-n { position: relative; font-weight: 600; font-size: 13px; }
+.poll-sheet { max-height: 80vh; overflow-y: auto; }
+.request-banner { flex-wrap: wrap; }
+.swipe-actions { width: 336px; }
+.swipe-btn.pin { background: #5856d6; }
+.chat-settings { padding: 4px 0; margin-bottom: 8px; }
+.setting-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; }
+.setting-row + .setting-row { border-top: 1px solid var(--line); }
+.setting-row.danger { color: var(--danger); }
+.setting-row select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }

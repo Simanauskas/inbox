@@ -94,7 +94,7 @@ extra_of() {
   case $1 in
     # ask the phone for a year of history instead of three months
     # and name people as you saved them in your phone, without the default " (WA)" tag
-    whatsapp) echo '| .network.history_sync.request_full_sync = true | .network.displayname_template = "{{or .FullName .BusinessName .PushName .Phone .RedactedPhone \"Unknown user\"}}"' ;;
+    whatsapp) echo '| .network.history_sync.request_full_sync = true | .network.extev_polls = true | .network.displayname_template = "{{or .FullName .BusinessName .PushName .Phone .RedactedPhone \"Unknown user\"}}"' ;;
     telegram) echo '| .network.api_id = env(TELEGRAM_API_ID) | .network.api_hash = strenv(TELEGRAM_API_HASH)' ;;
     # most Messenger 1:1 chats are end-to-end encrypted; their history only comes
     # from Messenger's encrypted backup, which the bridge restores with your 6-digit PIN

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { go } from '../router.js'
-import { previewText, normName, deliveryStatus, setArchived } from '../people.js'
+import { previewText, normName, deliveryStatus, setArchived, setPinned } from '../people.js'
 import { PEOPLE_TYPE } from '../matrix.js'
 import { TICKS, TICK_TITLE } from './Thread.jsx'
 import { Avatar, NetBadge, TopBar, Icon, timeShort } from './common.jsx'
@@ -107,7 +107,7 @@ function Row({ client, i, selected }) {
   const [dx, setDx] = useState(0)
   const [open, setOpen] = useState(false)
   const t = useRef(null)
-  const W = 252
+  const W = 336
   const unreadNow = i.unread > 0 || i.mutedUnread > 0 || i.markedUnread
   const close = () => { setOpen(false); setDx(0) }
 
@@ -169,6 +169,10 @@ function Row({ client, i, selected }) {
     close()
     for (const id of i.rooms) client.setMuted(id, !i.muted).catch(() => {})
   }
+  async function togglePin() {
+    close()
+    await client.setAccountData(PEOPLE_TYPE, setPinned(client.accountData[PEOPLE_TYPE], i, !i.pinned)).catch(() => {})
+  }
   async function archive() {
     close()
     await client.setAccountData(PEOPLE_TYPE, setArchived(client.accountData[PEOPLE_TYPE], i, !i.archived)).catch(() => {})
@@ -176,6 +180,7 @@ function Row({ client, i, selected }) {
   return (
     <li ref={li} className="swipe" onContextMenu={(e) => { e.preventDefault(); setOpen(true); setDx(-W) }}>
       <div className="swipe-actions" aria-hidden={!open}>
+        <button className="swipe-btn pin" onClick={togglePin}><Icon name="pinchat" size={20} />{i.pinned ? 'Unpin' : 'Pin'}</button>
         <button className="swipe-btn mute" onClick={toggleMute}><Icon name={i.muted ? 'bell' : 'muted'} size={20} />{i.muted ? 'Unmute' : 'Mute'}</button>
         <button className="swipe-btn more" onClick={toggleRead}><Icon name={unreadNow ? 'check' : 'dot'} size={20} />{unreadNow ? 'Read' : 'Unread'}</button>
         <button className="swipe-btn archive" onClick={archive}><Icon name="archive" size={20} />{i.archived ? 'Unarchive' : 'Archive'}</button>
@@ -198,6 +203,7 @@ function Row({ client, i, selected }) {
               {i.typing ? <i className="typing-label">typing…</i> : i.lastEvent ? <><ListTicks client={client} i={i} />{previewText(i.lastEvent, i.lastEvent.type === 'm.reaction' ? client.userId : null, client.rooms[i.lastRoom], i.kind === 'group')}</> : <i>No messages yet</i>}
             </span>
             {i.muted && <span className="muted-icon" aria-label="Muted"><Icon name="muted" size={16} /></span>}
+            {i.pinned && <span className="muted-icon" aria-label="Pinned"><Icon name="pinchat" size={15} /></span>}
             {i.unread > 0 ? <span className="badge">{i.unread}</span>
               : i.mutedUnread > 0 ? <span className="badge quiet" aria-label={`${i.mutedUnread} unread, muted`}>{i.mutedUnread}</span>
                 : i.markedUnread ? <span className="badge dot" aria-label="Marked unread" /> : null}

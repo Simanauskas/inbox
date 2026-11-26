@@ -206,7 +206,7 @@ export class Client {
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
         heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount, unreadCount: room.unreadCount || 0,
-        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null, topic: room.topic || null, power: room.power || null, features: room.features ?? null,
+        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null, topic: room.topic || null, power: room.power || null, features: room.features ?? null, disappearing: room.disappearing || null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
         // without one, the next "load older" starts from the newest and skips what it has
@@ -282,6 +282,7 @@ export class Client {
       case 'm.room.avatar': room.avatarUrl = c.url || null; break
       case 'm.room.topic': room.topic = c.topic || null; break
       case 'com.beeper.room_features': room.features = c; break
+      case 'com.beeper.disappearing_timer': room.disappearing = c.timer ? c : null; break
       case 'm.room.power_levels': room.power = { users: c.users || {}, users_default: c.users_default, invite: c.invite, kick: c.kick, events: c.events || {}, state_default: c.state_default }; break
       case 'm.room.create': room.createTs = ev.origin_server_ts || 0; room.roomType = c.type || null; break
       case 'm.bridge':
@@ -371,9 +372,10 @@ export class Client {
   // What the app allows in this chat (editing etc.), for rooms cached before we kept it.
   async loadFeatures(roomId) {
     const room = this.rooms[roomId]
-    if (!room || room.features !== undefined && room.features !== null || room.featuresTried) return
+    if (!room || room.featuresTried) return
     room.featuresTried = true
     try { room.features = await this.api('GET', `/_matrix/client/v3/rooms/${enc(roomId)}/state/com.beeper.room_features`); this.emit() } catch { room.features = null }
+    try { const t = await this.api('GET', `/_matrix/client/v3/rooms/${enc(roomId)}/state/com.beeper.disappearing_timer`); room.disappearing = t?.timer ? t : null; this.emit() } catch {}
   }
 
   // Edit one of your messages (the bridge changes it in the app too).
@@ -383,6 +385,70 @@ export class Client {
       'm.new_content': { msgtype: 'm.text', body },
       'm.relates_to': { rel_type: 'm.replace', event_id: eventId },
     })
+  }
+
+  // --- what the apps can do, through the bridges (see room.features) ---
+
+  // Delete for everyone ("unsend")
+  async redact(roomId, eventId) {
+    const room = this.rooms[roomId]
+    const ev = room?.byId[eventId]
+    if (ev) { ev.unsigned = { ...(ev.unsigned || {}), redacted_because: { local: true } }; this.emit() }
+    await this.api('PUT', `/_matrix/client/v3/rooms/${enc(roomId)}/redact/${enc(eventId)}/${txnId()}`, {})
+  }
+
+  // Forward a message to another chat (photos and files go as they are, no re-upload)
+  forward(ev, toRoomId) {
+    const c = { ...(ev.content || {}) }
+    delete c['m.relates_to']; delete c['m.new_content']; delete c['m.mentions']
+    if (c.body && c.msgtype === 'm.text') c.body = stripQuote(c.body)
+    if (c.formatted_body) c.formatted_body = c.formatted_body.replace(/<mx-reply>[\s\S]*?<\/mx-reply>/g, '')
+    return this.send(toRoomId, c, ev.type === 'm.sticker' ? 'm.sticker' : 'm.room.message')
+  }
+
+  sendPoll(roomId, question, answers, maxSelections = 1) {
+    const list = answers.map((text, i) => ({ id: `o${i + 1}`, 'org.matrix.msc1767.text': text }))
+    const fallback = `${question}\n${answers.map((a, i) => `${i + 1}. ${a}`).join('\n')}`
+    return this.send(roomId, {
+      'org.matrix.msc3381.poll.start': { kind: 'org.matrix.msc3381.poll.disclosed', max_selections: maxSelections, question: { 'org.matrix.msc1767.text': question }, answers: list },
+      'org.matrix.msc1767.text': fallback, body: fallback,
+    }, 'org.matrix.msc3381.poll.start')
+  }
+
+  vote(roomId, pollId, answerIds) {
+    return this.send(roomId, { 'm.relates_to': { rel_type: 'm.reference', event_id: pollId }, 'org.matrix.msc3381.poll.response': { answers: answerIds } }, 'org.matrix.msc3381.poll.response')
+  }
+
+  sendLocation(roomId, lat, lon, accuracy) {
+    const geo = `geo:${lat.toFixed(6)},${lon.toFixed(6)}${accuracy ? `;u=${Math.round(accuracy)}` : ''}`
+    return this.send(roomId, { msgtype: 'm.location', body: 'Location', geo_uri: geo })
+  }
+
+  // Disappearing messages: ms = 0 turns them off
+  setDisappearing(roomId, ms) {
+    return this.setRoomState(roomId, 'com.beeper.disappearing_timer', ms ? { type: 'after_send', timer: ms } : {})
+  }
+
+  async setRoomAvatar(roomId, file) {
+    const url = await this.upload(file)
+    await this.setRoomState(roomId, 'm.room.avatar', { url })
+  }
+
+  // Message requests (Messenger / Instagram): accept, or delete
+  acceptRequest(roomId) { return this.send(roomId, {}, 'com.beeper.accept_message_request') }
+
+  blockUser(roomId, block) {
+    const room = this.rooms[roomId]
+    if (room?.bridge?.channel) { room.bridge.channel['com.beeper.user_blocked'] = block; this.emit() }
+    return this.send(roomId, { block }, 'com.beeper.block_user')
+  }
+
+  // Delete the chat in the app (Telegram can also delete it for the other person); the
+  // bridge then removes the room.
+  async deleteChat(roomId, { forEveryone = false, fromRequest = false } = {}) {
+    await this.send(roomId, { ...(forEveryone ? { delete_for_everyone: true } : {}), ...(fromRequest ? { from_message_request: true } : {}) }, 'com.beeper.delete_chat')
+    if (this.rooms[roomId]) this.rooms[roomId].membership = 'leave'
+    this.emit()
   }
 
   // --- groups: the bridge carries these to the app (add / remove people, rename, leave) ---
@@ -655,6 +721,14 @@ export class Client {
     this.media.set(key, p)
     return p
   }
+}
+
+function stripQuote(body) {
+  if (!body.startsWith('> ')) return body
+  const lines = body.split('\n')
+  let i = 0
+  while (i < lines.length && lines[i].startsWith('>')) i++
+  return lines.slice(lines[i] === '' ? i + 1 : i).join('\n')
 }
 
 export function isMessage(ev) {

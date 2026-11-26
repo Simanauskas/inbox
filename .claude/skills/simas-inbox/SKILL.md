@@ -312,3 +312,27 @@ these images. Details and gotchas: `references/server.md`.
   `com.beeper.room_features` allows (edit > 0, edit_max_age: WhatsApp/Messenger/Instagram 900 s,
   Telegram none); iMessage/SMS have no features event → no edit. `canEdit` in people.js;
   room.features from state (client.loadFeatures for rooms cached before).
+
+## Everything the bridges can do (26 Nov 2026) — check `com.beeper.room_features` first
+He wants every feature the apps offer without asking one by one. Each bridged room has state
+`com.beeper.room_features` (room.features; client.loadFeatures for old cached rooms). Built:
+- Message menu (long-press / right-click): reactions row (Telegram mapped to its
+  `allowed_reactions` via emoji.js reactionsFor/allowedReaction) + Reply · Edit · Forward · Copy ·
+  Delete for everyone (redact; `canDelete`, delete_max_age e.g. WhatsApp 2 days).
+- Forward sheet (ForwardSheet) → client.forward copies content (mxc media reused).
+- Formatting: send *bold* _italic_ ~strike~ `code` ```block``` "> quote" as HTML (format.js
+  markdownToHtml); show received formatted_body via ui/Rich.jsx (sanitizer: small tag whitelist,
+  http(s) links only, mentions shown as @Name, scripts dropped).
+- @mentions in groups (mentionQuery → member list; m.mentions + matrix.to links).
+- Polls (WhatsApp; Messenger groups multi-choice only): org.matrix.msc3381.poll.start/.response;
+  WhatsApp bridge needs `network.extev_polls: true` (setup.sh, on since 26 Nov). Poll card votes,
+  shows who voted; "···" → Poll / Location in the composer when features.poll / location_message.
+- Location (WhatsApp): navigator.geolocation → m.location geo_uri (Info.plist location text).
+- Chat settings (ui/ChatSettings.jsx on contact + group pages): disappearing messages
+  (state com.beeper.disappearing_timer {type: after_send, timer ms}; {} = off), block
+  (com.beeper.block_user {block}; m.bridge channel com.beeper.user_blocked), delete chat
+  (com.beeper.delete_chat {delete_for_everyone?}), group photo (m.room.avatar).
+- Message requests (Messenger/Instagram): m.bridge channel `com.beeper.message_request` →
+  RequestBanner: Accept (com.beeper.accept_message_request) / Delete (delete_chat from_message_request).
+- Pin chats (Inbox-only): people config `pinned` {key: ts}, swipe/right-click → Pin; pinned first.
+Not done: GIF/sticker picker, view-once media, starring messages.

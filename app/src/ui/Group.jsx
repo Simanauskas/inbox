@@ -5,6 +5,7 @@ import { normName } from '../people.js'
 import { groupCaps, groupMembers, canDo, powerOf, addable, ghostFor } from '../group.js'
 import { Avatar, NetBadge, TopBar, Icon } from './common.jsx'
 import { ConfirmCard } from './PhoneBook.jsx'
+import ChatSettings from './ChatSettings.jsx'
 
 // A group's page, like WhatsApp's "Group info": name, description, who's in it,
 // and (where the app's bridge allows) adding and removing people, the invite link, leaving.
@@ -82,6 +83,7 @@ export default function GroupPage({ ctx, item }) {
         </ul>
         {!caps.add && <p className="hint">{app} groups can't be changed from Inbox. Add or remove people in the {app} app.</p>}
 
+        <ChatSettings client={client} model={model} roomId={roomId} kind="group" name={item.name} />
         {caps.leave && <button className="wide-btn danger" onClick={leave}>Leave group</button>}
       </div>
       {open && <MemberSheet ctx={ctx} room={room} group={item} m={open} caps={caps} onClose={() => setOpen(null)} onDone={setMsg} />}

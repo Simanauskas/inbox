@@ -3,12 +3,14 @@ import { createPortal } from 'react-dom'
 import { isNative, pickPhotos, openExternal } from '../native.js'
 import { callOptions } from '../calls.js'
 import { go, back } from '../router.js'
-import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig, canEdit } from '../people.js'
+import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig, canEdit, canDelete, pollOf, tallyPoll, POLL_START } from '../people.js'
+import { markdownToHtml, mentionQuery } from '../format.js'
+import Rich, { hasRichFormatting } from './Rich.jsx'
 import { networkInfo } from '../networks.js'
 import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
 import { ContactPrompt } from './PhoneBook.jsx'
 import { InviteBanner, PlanBanner } from './Lists.jsx'
-import { EMOJI_GRID, quickReactions, splitEmojis } from '../emoji.js'
+import { EMOJI_GRID, quickReactions, splitEmojis, reactionsFor, allowedReaction } from '../emoji.js'
 import { PEOPLE_TYPE } from '../matrix.js'
 import { isLooking, onLookingChange } from '../looking.js'
 
@@ -30,6 +32,8 @@ export default function Thread({ ctx, item }) {
   const [editing, setEditing] = useState(null) // { ev, roomId }: your message being edited
   const [active, setActive] = useState(null) // event id with open action bar
   const [picker, setPicker] = useState(null) // { ev, roomId } for the "+" emoji panel
+  const [forwarding, setForwarding] = useState(null) // the message being forwarded
+  const [notice, setNotice] = useState(null)
   const quick = quickReactions(normConfig(client.accountData[PEOPLE_TYPE]))
   const [, tick] = useState(0)
 
@@ -152,6 +156,8 @@ export default function Thread({ ctx, item }) {
       <ContactPrompt ctx={ctx} item={item} />
       <InviteBanner ctx={ctx} item={item} />
       <PlanBanner ctx={ctx} item={item} />
+      <RequestBanner ctx={ctx} item={item} />
+      {notice && <div className="contact-prompt"><span>{notice}</span><button className="icon-btn" onClick={() => setNotice(null)} aria-label="Close"><Icon name="close" size={16} /></button></div>}
       <div className="timeline" ref={scroller} onScroll={onScroll} onClick={() => setActive(null)}>
         {hasMore ? <div className="older">{loading ? <div className="spinner small" /> : <button onClick={loadOlder}>Load older messages</button>}</div>
           : <div className="older muted">Start of your history</div>}
@@ -177,6 +183,12 @@ export default function Thread({ ctx, item }) {
                 quick={quick}
                 onReact={(k) => { client.react(en.roomId, en.ev.event_id, k).catch(() => {}); setActive(null) }}
                 onMore={() => { setPicker(en); setActive(null) }}
+                onForward={() => { setForwarding(en); setActive(null) }}
+                onDelete={canDelete(rooms[en.roomId], en.ev, me) ? () => {
+                  setActive(null)
+                  if (confirm(`Delete this message for everyone on ${networkInfo(model.info[en.roomId]?.network).name}?`)) client.redact(en.roomId, en.ev.event_id).catch((e) => setNotice(`Couldn't delete: ${e.message}`))
+                } : null}
+                onVote={(ids) => client.vote(en.roomId, en.ev.event_id, ids).catch((e) => setNotice(`Couldn't vote: ${e.message}`))}
               />
             </React.Fragment>
           )
@@ -184,9 +196,15 @@ export default function Thread({ ctx, item }) {
         {typing.length > 0 && <div className="typing"><span /><span /><span /></div>}
       </div>
       {picker && (
-        <EmojiSheet onClose={() => setPicker(null)}
-          onPick={(k) => { client.react(picker.roomId, picker.ev.event_id, k).catch(() => {}); setPicker(null) }} />
+        <EmojiSheet allowed={rooms[picker.roomId]?.features?.allowed_reactions} onClose={() => setPicker(null)}
+          onPick={(k) => {
+            const ok = allowedReaction(rooms[picker.roomId]?.features, k)
+            if (ok) client.react(picker.roomId, picker.ev.event_id, ok).catch(() => {})
+            else setNotice(`${networkInfo(model.info[picker.roomId]?.network).name} doesn't allow ${k} as a reaction.`)
+            setPicker(null)
+          }} />
       )}
+      {forwarding && <ForwardSheet ctx={ctx} en={forwarding} onClose={() => setForwarding(null)} onDone={(name) => { setForwarding(null); setNotice(`Forwarded to ${name}`) }} />}
       <Composer
         ctx={ctx} target={target} replyTo={replyTo}
         editing={editing} onEdit={(en) => { setEditing(en); setReplyTo(null) }} onCancelEdit={() => setEditing(null)} lastEditable={lastEditable}
@@ -236,7 +254,7 @@ function useLongPress(onLong, ms = 420) {
   }
 }
 
-function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status, seenHere, open, onOpen, onReply, onEdit, onReact, onMore, quick }) {
+function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status, seenHere, open, onOpen, onReply, onEdit, onReact, onMore, onForward, onDelete, onVote, quick }) {
   const { client, model } = ctx
   const press = useLongPress(onOpen)
   const box = useRef(null)
@@ -248,6 +266,8 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
   const net = model.info[roomId]?.network
   const c = ev.content || {}
   const notice = c.msgtype === 'm.notice' && !mine
+  const bar = reactionsFor(room?.features, quick)
+  const deleted = ev.redacted || ev.unsigned?.redacted_because
   const replyId = c['m.relates_to']?.['m.in_reply_to']?.event_id
   const quoted = replyId ? room?.byId[replyId] : null
   const time = new Date(ev.origin_server_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
@@ -260,7 +280,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
         {replyId && (
           <div className="quote">{quoted ? previewText(quoted, client.userId).replace(/^You: /, '') : 'Replying to an earlier message'}</div>
         )}
-        <MessageBody client={client} ev={ev} />
+        {ev.type === POLL_START ? <Poll client={client} room={room} ev={ev} votes={en.votes} onVote={onVote} /> : <MessageBody client={client} ev={ev} members={room?.members} />}
         <span className="meta">
           {ev.edited && 'edited · '}
           {time}
@@ -279,18 +299,26 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
       )}
       {open && !ev.local && (
         <div className={`actions ${below ? 'below' : 'above'}`} onClick={(e) => e.stopPropagation()} role="toolbar" aria-label="Message actions">
-          {quick.map((k) => <button key={k} onClick={() => onReact(k)}>{k}</button>)}
-          <button className="more" onClick={onMore} aria-label="More emojis">＋</button>
-          <button onClick={onReply} aria-label="Reply"><Icon name="reply" size={18} /></button>
-          {onEdit && <button onClick={onEdit} aria-label="Edit"><Icon name="edit" size={18} /></button>}
-          {c.body && <button onClick={() => navigator.clipboard?.writeText(stripReply(c.body))}>Copy</button>}
+          {!deleted && (
+            <div className="act-row">
+              {bar.map((k) => <button key={k} onClick={() => onReact(k)}>{k}</button>)}
+              <button className="more" onClick={onMore} aria-label="More emojis">＋</button>
+            </div>
+          )}
+          <div className="act-row tools">
+            <button onClick={onReply} aria-label="Reply" title="Reply"><Icon name="reply" size={18} /></button>
+            {onEdit && <button onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={18} /></button>}
+            {!deleted && <button onClick={onForward} aria-label="Forward" title="Forward"><Icon name="forward" size={18} /></button>}
+            {c.body && !deleted && <button onClick={() => navigator.clipboard?.writeText(stripReply(c.body))} aria-label="Copy" title="Copy"><Icon name="copy" size={18} /></button>}
+            {onDelete && !deleted && <button className="danger" onClick={onDelete} aria-label="Delete for everyone" title="Delete for everyone"><Icon name="trash" size={18} /></button>}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function MessageBody({ client, ev }) {
+function MessageBody({ client, ev, members }) {
   const c = ev.content || {}
   if (ev.redacted || ev.unsigned?.redacted_because) return <span className="muted"><i>Message deleted</i></span>
   if (ev.type === 'm.sticker') return <Img client={client} c={c} sticker />
@@ -301,7 +329,7 @@ function MessageBody({ client, ev }) {
     case 'm.file': return <FileLink client={client} c={c} />
     case 'm.location': return <a href={geoLink(c.geo_uri)} target="_blank" rel="noreferrer">📍 {c.body || 'Location'}</a>
     case 'm.emote': return <span className="text"><i>* {c.body}</i></span>
-    default: return <span className="text">{linkify(stripReply(c.body || ''))}</span>
+    default: return hasRichFormatting(c) ? <Rich html={c.formatted_body} members={members} /> : <span className="text">{linkify(stripReply(c.body || ''))}</span>
   }
 }
 
@@ -455,6 +483,34 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
   const suggested = suggestionsFor(client.rooms[target], client.userId)
   const useSuggestion = (s) => { setText(s); setTimeout(() => { const el = area.current; if (el) { el.focus(); el.setSelectionRange(s.length, s.length) } }, 0) }
   const [pending, setPending] = useState([]) // photos/files picked, waiting for a caption + send
+  const [mentions, setMentions] = useState([]) // [{ name, userId }] picked from the @ list
+  const [menu, setMenu] = useState(null) // null | 'menu' | 'poll'
+  const room = client.rooms[target]
+  const feats = room?.features || {}
+  const isGroupRoom = model.info[target]?.kind === 'group'
+  const canPoll = feats.poll > 0
+  const canLocation = feats.location_message > 0
+  // @ in a group: who's in it
+  const mq = isGroupRoom ? mentionQuery(text) : null
+  const memberHits = mq === null ? [] : Object.entries(room?.members || {})
+    .filter(([uid, m]) => m.membership === 'join' && uid !== client.userId && !/bot:/.test(uid) && m.displayname)
+    .map(([uid, m]) => ({ userId: uid, name: cleanName(m.displayname) }))
+    .filter((m) => !mq || m.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(mq.toLowerCase())))
+    .slice(0, 6)
+  function pickMention(m) {
+    const t = text.replace(/@([^\s@]{0,30})$/, `@${m.name} `)
+    setText(t)
+    setMentions((list) => [...list.filter((x) => x.userId !== m.userId), m])
+    setTimeout(() => area.current?.focus(), 0)
+  }
+  async function shareLocation() {
+    setMenu(null)
+    if (!navigator.geolocation) { setErr('Location isn’t available here.'); return }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { onSent(); client.sendLocation(target, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy).catch((e) => setErr(`Couldn't send the location: ${e.message}`)) },
+      (e) => setErr(e.code === 1 ? 'Inbox isn’t allowed to use your location. Allow it in Settings.' : `Couldn't get your location: ${e.message}`),
+      { enableHighAccuracy: true, timeout: 15000 })
+  }
   const fileInput = useRef(null)
   const cameraInput = useRef(null)
   const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
@@ -505,6 +561,12 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
     typingAt.current = 0
     client.typing(target, false)
     const content = { msgtype: 'm.text', body }
+    // *bold* _italic_ ~strike~ `code` and @mentions go as formatting the app understands
+    const used = mentions.filter((m) => body.includes('@' + m.name))
+    const html = markdownToHtml(body, used)
+    if (html) { content.format = 'org.matrix.custom.html'; content.formatted_body = html }
+    if (used.length) content['m.mentions'] = { user_ids: [...new Set(used.map((m) => m.userId))] }
+    setMentions([])
     if (replyTo && replyTo.roomId === target) content['m.relates_to'] = { 'm.in_reply_to': { event_id: replyTo.ev.event_id } }
     onSent()
     try { await client.send(target, content) } catch (e) { setErr(`Couldn't send: ${e.message}`) }
@@ -593,6 +655,20 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
         </div>
       )}
       {err && <div className="error small">{err}</div>}
+      {memberHits.length > 0 && (
+        <div className="mention-list" role="listbox" aria-label="Mention someone">
+          {memberHits.map((m) => <button key={m.userId} onMouseDown={(e) => e.preventDefault()} onClick={() => pickMention(m)}>@{m.name}</button>)}
+        </div>
+      )}
+      {menu === 'menu' && (
+        <div className="attach-menu">
+          <button onClick={() => { setMenu(null); openPicker() }}><Icon name="gallery" size={18} /> Photos & files</button>
+          {canPoll && <button onClick={() => setMenu('poll')}><Icon name="poll" size={18} /> Poll</button>}
+          {canLocation && <button onClick={shareLocation}><Icon name="pin" size={18} /> Location</button>}
+        </div>
+      )}
+      {menu === 'poll' && <PollSheet max={feats.poll_max_options || 12} multiOnly={!!feats.poll_multiple_choice_only} onClose={() => setMenu(null)}
+        onSend={(q, answers, multi) => { setMenu(null); onSent(); client.sendPoll(target, q, answers, multi ? answers.length : 1).catch((e) => setErr(`Couldn't send the poll: ${e.message}`)) }} />}
       {!text && !editing && !pending.length && !voice.rec && suggested.length > 0 && (
         <div className="suggestions" aria-label="Suggested replies">
           {suggested.map((s) => <button key={s} className="suggestion" onClick={() => useSuggestion(s)}>{s}</button>)}
@@ -626,6 +702,7 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
           <button className="icon-btn" onClick={openPicker} aria-label={touch ? 'Photos and videos' : 'Attach files'}>
             <Icon name={touch ? 'gallery' : 'plus'} />
           </button>
+          {(canPoll || canLocation) && <button className="icon-btn" onClick={() => setMenu(menu ? null : 'menu')} aria-label="Poll, location" aria-expanded={!!menu}><Icon name="more" /></button>}
           {touch && !text && <button className="icon-btn" onClick={() => cameraInput.current?.click()} aria-label="Take a photo or video"><Icon name="camera" /></button>}
           <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
           <input ref={cameraInput} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFiles} />
@@ -634,6 +711,7 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
             placeholder={editing ? 'Edit your message' : pending.length ? 'Add a caption…' : suggested[0] && !matchMedia('(pointer: coarse)').matches ? `${suggested[0]}   ⇥ Tab` : `Message on ${networkInfo(net).name}`}
             onKeyDown={(e) => {
               // Tab on an empty box takes the first suggestion (like code completion)
+              if ((e.key === 'Tab' || e.key === 'Enter') && memberHits.length) { e.preventDefault(); pickMention(memberHits[0]); return }
               if (e.key === 'Tab' && !e.shiftKey && !text && suggested[0] && !editing) { e.preventDefault(); useSuggestion(suggested[0]); return }
               // ↑ in an empty box: edit your last message (like Slack / Telegram desktop)
               if (e.key === 'ArrowUp' && !text && !pending.length && !editing) { const en = lastEditable(); if (en) { e.preventDefault(); onEdit(en) } return }
@@ -651,7 +729,7 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
 }
 
 // "+" in the reaction bar: any emoji — common ones to tap, or type one from your keyboard.
-function EmojiSheet({ onPick, onClose }) {
+function EmojiSheet({ onPick, onClose, allowed }) {
   const [typed, setTyped] = useState('')
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -659,7 +737,7 @@ function EmojiSheet({ onPick, onClose }) {
         <input className="search" value={typed} placeholder="Type any emoji…" enterKeyHint="done"
           onChange={(e) => { const g = splitEmojis(e.target.value); setTyped(e.target.value); if (g.length) onPick(g[0]) }} />
         <div className="emoji-grid">
-          {EMOJI_GRID.map((k) => <button key={k} onClick={() => onPick(k)}>{k}</button>)}
+          {(Array.isArray(allowed) ? allowed : EMOJI_GRID).map((k) => <button key={k} onClick={() => onPick(k)}>{k}</button>)}
         </div>
       </div>
     </div>
@@ -717,5 +795,114 @@ function CallButton({ item, model }) {
         document.body, // not inside the header: its blur would trap a fixed overlay
       )}
     </>
+  )
+}
+
+// A poll (WhatsApp, Messenger groups): tap an answer to vote; results show who voted.
+function Poll({ client, room, ev, votes, onVote }) {
+  const poll = pollOf(ev)
+  if (!poll) return null
+  const me = client.userId
+  const tally = tallyPoll(poll, votes || {})
+  const mine = new Set((votes || {})[me] || [])
+  const total = new Set(Object.values(tally).flat()).size
+  const canVote = room?.features?.poll > 0
+  const name = (uid) => uid === me ? 'You' : cleanName(room?.members?.[uid]?.displayname || '').split(' ')[0] || 'Someone'
+  function toggle(id) {
+    if (!canVote) return
+    let next
+    if (poll.max <= 1) next = mine.has(id) ? [] : [id]
+    else next = mine.has(id) ? [...mine].filter((x) => x !== id) : [...mine, id].slice(-poll.max)
+    onVote(next)
+  }
+  return (
+    <div className="poll">
+      <div className="poll-q">📊 {poll.question}</div>
+      <div className="muted small">{poll.max > 1 ? 'Pick one or more' : 'Pick one'}{!canVote && ' · vote in the app'}</div>
+      {poll.answers.map((a) => {
+        const who = tally[a.id] || []
+        const pct = total ? Math.round((who.length / total) * 100) : 0
+        return (
+          <button key={a.id} className={`poll-a ${mine.has(a.id) ? 'on' : ''}`} onClick={() => toggle(a.id)} disabled={!canVote}>
+            <span className="poll-bar" style={{ width: `${pct}%` }} />
+            <span className="poll-check">{mine.has(a.id) ? '✓' : ''}</span>
+            <span className="poll-text">{a.text}</span>
+            <span className="poll-n" title={who.map(name).join(', ')}>{who.length || ''}</span>
+          </button>
+        )
+      })}
+      {total > 0 && <div className="muted small">{total} voted · {Object.entries(tally).filter(([, w]) => w.length).map(([id, w]) => `${poll.answers.find((a) => a.id === id)?.text}: ${w.map(name).join(', ')}`).join(' · ')}</div>}
+    </div>
+  )
+}
+
+function PollSheet({ max, multiOnly, onSend, onClose }) {
+  const [q, setQ] = useState('')
+  const [answers, setAnswers] = useState(['', ''])
+  const [multi, setMulti] = useState(multiOnly)
+  const filled = answers.map((a) => a.trim()).filter(Boolean)
+  const set = (i, v) => {
+    const next = answers.map((a, j) => (j === i ? v : a))
+    if (i === next.length - 1 && v && next.length < max) next.push('')
+    setAnswers(next)
+  }
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet poll-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="New poll">
+        <h3>New poll</h3>
+        <input className="search" autoFocus placeholder="Question" value={q} onChange={(e) => setQ(e.target.value)} />
+        {answers.map((a, i) => <input key={i} className="search" placeholder={`Option ${i + 1}`} value={a} maxLength={100} onChange={(e) => set(i, e.target.value)} />)}
+        {!multiOnly && <label className="radio"><input type="checkbox" checked={multi} onChange={(e) => setMulti(e.target.checked)} /> Allow more than one answer</label>}
+        <div className="sugg-actions">
+          <button className="text-btn" onClick={onClose}>Cancel</button>
+          <button className="primary" disabled={!q.trim() || filled.length < 2} onClick={() => onSend(q.trim(), filled, multi)}>Send poll</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Forward a message to any chat: pick who, it goes on the app you'd normally use with them.
+function ForwardSheet({ ctx, en, onClose, onDone }) {
+  const { client, model } = ctx
+  const [q, setQ] = useState('')
+  const nq = q.trim().toLowerCase()
+  const list = model.items.filter((i) => i.kind !== 'connection' && (!nq || i.name.toLowerCase().includes(nq))).slice(0, 40)
+  async function send(item) {
+    const roomId = chooseChannel(item, client.rooms, client.userId, { windowHours: model.config.replyWindowHours }).roomId || item.rooms[0]
+    try { await client.forward(en.ev, roomId); onDone(item.name) } catch (e) { alert(`Couldn't forward: ${e.message}`) }
+  }
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Forward to">
+        <h3>Forward to…</h3>
+        <input className="search" autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+        <ul className="list pick-list">
+          {list.map((i) => (
+            <li key={i.key}><button className="member-row" onClick={() => send(i)}>
+              <Avatar client={client} mxc={i.avatarUrl} name={i.name} size={32} />
+              <span className="grow">{i.name}</span>
+              <span className="nets">{i.networks.slice(0, 2).map((n) => <NetBadge key={n} net={n} />)}</span>
+            </button></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+// Messenger / Instagram "message requests": someone new wrote; accept or delete.
+function RequestBanner({ ctx, item }) {
+  const { client, model } = ctx
+  const roomId = item.rooms.find((id) => client.rooms[id]?.bridge?.channel?.['com.beeper.message_request'])
+  const [busy, setBusy] = useState(false)
+  if (!roomId) return null
+  const app = networkInfo(model.info[roomId]?.network).name
+  return (
+    <div className="contact-prompt request-banner">
+      <span><b>Message request</b> on {app}. They won't know you've seen it until you accept or reply.</span>
+      <button className="text-btn inline" disabled={busy} onClick={async () => { setBusy(true); await client.acceptRequest(roomId).catch(() => {}); client.rooms[roomId].bridge.channel['com.beeper.message_request'] = false; setBusy(false) }}>Accept</button>
+      <button className="text-btn inline danger" disabled={busy} onClick={async () => { if (confirm(`Delete this request on ${app}?`)) { await client.deleteChat(roomId, { fromRequest: true }).catch(() => {}); go('inbox') } }}>Delete</button>
+    </div>
   )
 }

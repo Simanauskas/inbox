@@ -6,6 +6,7 @@ import { Avatar, NetBadge, TopBar, identityOf, timeShort } from './common.jsx'
 import { PhoneBookCard, ContactDetails } from './PhoneBook.jsx'
 import { ListMembership } from './Lists.jsx'
 import GroupPage from './Group.jsx'
+import ChatSettings from './ChatSettings.jsx'
 
 export default function Person(props) {
   return props.item.kind === 'group' ? <GroupPage {...props} /> : <Contact {...props} />
@@ -90,6 +91,9 @@ function Contact({ ctx, item }) {
             )
           })}
         </ul>
+
+        {item.rooms.some((id) => client.rooms[id]?.bridge) && <h3 className="section">Chat settings</h3>}
+        {item.rooms.map((id) => <ChatSettings key={id} client={client} model={model} roomId={id} kind="dm" name={item.name.split(' ')[0]} />)}
 
         {item.kind === 'person' && (picking ? (
           <div className="picker">

@@ -25,3 +25,19 @@ export function quickReactions(config) {
   const list = config?.quickReactions
   return Array.isArray(list) && list.length ? list.slice(0, 8) : DEFAULT_REACTIONS
 }
+
+// Telegram only takes reactions from its own set (room_features.allowed_reactions).
+// Map your bar onto it (👍 is "👍️" there) and fill the rest from its list.
+const bare = (e) => e.replace(/️/g, '')
+export function allowedReaction(features, emoji) {
+  const allowed = features?.allowed_reactions
+  if (!Array.isArray(allowed)) return emoji
+  return allowed.find((a) => bare(a) === bare(emoji)) || null
+}
+export function reactionsFor(features, quick) {
+  const allowed = features?.allowed_reactions
+  if (!Array.isArray(allowed)) return quick
+  const out = quick.map((e) => allowedReaction(features, e)).filter(Boolean)
+  for (const a of allowed) { if (out.length >= quick.length) break; if (!out.includes(a)) out.push(a) }
+  return out
+}

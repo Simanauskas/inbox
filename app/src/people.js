@@ -6,12 +6,35 @@ import { contactMatch } from './contacts.js'
 export const DEFAULT_CONFIG = { version: 1, people: {}, dismissed: [], replyWindowHours: 12, archived: {} }
 
 export function normConfig(c) {
-  return { ...DEFAULT_CONFIG, ...(c || {}), people: { ...((c && c.people) || {}) }, dismissed: [...((c && c.dismissed) || [])], unlinked: [...((c && c.unlinked) || [])], archived: { ...((c && c.archived) || {}) } }
+  return { ...DEFAULT_CONFIG, ...(c || {}), pinned: { ...((c && c.pinned) || {}) }, people: { ...((c && c.people) || {}) }, dismissed: [...((c && c.dismissed) || [])], unlinked: [...((c && c.unlinked) || [])], archived: { ...((c && c.archived) || {}) } }
+}
+
+export const POLL_START = 'org.matrix.msc3381.poll.start'
+export const POLL_RESPONSE = 'org.matrix.msc3381.poll.response'
+const pollText = (m) => m?.['org.matrix.msc1767.text'] || (m?.['org.matrix.msc1767.message'] || []).find((x) => !x.mimetype || x.mimetype === 'text/plain')?.body || ''
+
+// A poll (WhatsApp, Messenger groups): question, answers, how many you can pick.
+export function pollOf(ev) {
+  const p = ev?.content?.[POLL_START]
+  if (!p) return null
+  return {
+    question: pollText(p.question),
+    answers: (p.answers || []).map((a) => ({ id: a.id, text: pollText(a) })),
+    max: p.max_selections || 1,
+  }
+}
+
+// votes: { sender: [answer ids] } (each person's latest vote) → { answerId: [senders] }
+export function tallyPoll(poll, votes = {}) {
+  const t = Object.fromEntries(poll.answers.map((a) => [a.id, []]))
+  for (const [who, ids] of Object.entries(votes)) for (const id of ids.slice(0, poll.max)) if (t[id]) t[id].push(who)
+  return t
 }
 
 export function isDisplayable(ev) {
   if (ev.redacted || ev.unsigned?.redacted_because) return ev.type === 'm.room.message' || ev.type === 'm.sticker'
   if (ev.type === 'm.sticker') return true
+  if (ev.type === POLL_START) return !!ev.content?.[POLL_START]
   if (ev.type !== 'm.room.message') return false
   if (isGroupCommand(ev)) return false
   const rel = ev.content?.['m.relates_to']
@@ -200,9 +223,21 @@ export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null)
       { contact: i.contact, nameSource: i.contact ? 'contacts' : 'app' }))
   }
   items.sort((a, b) => b.lastTs - a.lastTs)
+  // pinned chats stay on top, in the order you pinned them (like WhatsApp)
+  const pinned = config.pinned || {}
+  for (const i of items) i.pinned = !!pinned[i.key]
+  items.sort((a, b) => (b.pinned - a.pinned) || (a.pinned ? pinned[a.key] - pinned[b.key] : 0))
   // archived until something new happens in the chat (then it's back in the inbox)
   for (const i of items) i.archived = !!config.archived[i.key] && config.archived[i.key] >= (i.lastTs || 0)
   return { items, connections, info, config, owner }
+}
+
+export function setPinned(rawConfig, item, on) {
+  const c = normConfig(rawConfig)
+  c.pinned = { ...(c.pinned || {}) }
+  if (on) c.pinned[item.key] = Date.now()
+  else delete c.pinned[item.key]
+  return c
 }
 
 export function setArchived(rawConfig, item, on) {
@@ -471,7 +506,8 @@ export function mergedTimeline(item, rooms) {
     cutoff,
     entries: all
       .filter(({ ev }) => ev.origin_server_ts >= cutoff && isDisplayable(ev))
-      .map(({ ev, roomId }) => ({ ev: applyEdits(ev, relations), roomId, reactions: relations.reactions[ev.event_id] || null }))
+      .map(({ ev, roomId }) => ({ ev: applyEdits(ev, relations), roomId, reactions: relations.reactions[ev.event_id] || null,
+        votes: ev.type === POLL_START ? Object.fromEntries(Object.entries(relations.votes[ev.event_id] || {}).map(([k, v]) => [k, v.ids])) : null }))
       .sort((a, b) => a.ev.origin_server_ts - b.ev.origin_server_ts),
     hasMore: item.rooms.some((id) => rooms[id] && !rooms[id].reachedStart),
   }
@@ -480,6 +516,7 @@ export function mergedTimeline(item, rooms) {
 function collectRelations(roomList) {
   const edits = {}
   const reactions = {}
+  const votes = {} // poll event id -> { sender: { ids, ts } }
   const redacted = new Set()
   for (const r of roomList) {
     for (const e of r.timeline) {
@@ -488,6 +525,12 @@ function collectRelations(roomList) {
     for (const e of r.timeline) {
       const rel = e.content?.['m.relates_to']
       if (!rel || redacted.has(e.event_id)) continue
+      if (e.type === POLL_RESPONSE && rel.event_id) {
+        const v = (votes[rel.event_id] ||= {})
+        const prev = v[e.sender]
+        if (!prev || prev.ts <= e.origin_server_ts) v[e.sender] = { ids: e.content[POLL_RESPONSE]?.answers || [], ts: e.origin_server_ts }
+        continue
+      }
       if (rel.rel_type === 'm.replace' && e.content['m.new_content']) {
         const prev = edits[rel.event_id]
         if (!prev || prev.origin_server_ts < e.origin_server_ts) edits[rel.event_id] = e
@@ -499,7 +542,7 @@ function collectRelations(roomList) {
       }
     }
   }
-  return { edits, reactions }
+  return { edits, reactions, votes }
 }
 
 function applyEdits(ev, { edits }) {
@@ -521,6 +564,16 @@ export function canEdit(room, ev, me, now = Date.now()) {
   return true
 }
 
+// Delete for everyone: your own messages, where the app allows it (WhatsApp: 2 days).
+export function canDelete(room, ev, me, now = Date.now()) {
+  if (!room || !ev || ev.sender !== me || ev.local) return false
+  if (ev.redacted || ev.unsigned?.redacted_because) return false
+  const f = room.features
+  if (!f || !(f.delete > 0)) return false
+  if (f.delete_max_age && now - ev.origin_server_ts > f.delete_max_age * 1000) return false
+  return true
+}
+
 export function previewText(ev, me, room = null, group = false) {
   if (!ev) return ''
   if (ev.type === 'm.reaction') {
@@ -534,6 +587,7 @@ export function previewText(ev, me, room = null, group = false) {
   const you = ev.sender === me ? 'You: ' : ''
   if (ev.redacted || ev.unsigned?.redacted_because) return you + 'Message deleted'
   if (ev.type === 'm.sticker') return you + 'Sticker'
+  if (ev.type === POLL_START) return you + '📊 ' + (pollOf(ev)?.question || 'Poll')
   const c = ev.content || {}
   const kinds = { 'm.image': '📷 Photo', 'm.video': '🎥 Video', 'm.audio': c['org.matrix.msc3245.voice'] ? '🎤 Voice message' : '🎵 Audio', 'm.file': '📎 ' + (c.body || 'File'), 'm.location': '📍 Location' }
   return you + (kinds[c.msgtype] || stripReply(c.body || ''))

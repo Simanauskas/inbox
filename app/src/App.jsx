@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react'
 import { Client, PEOPLE_TYPE } from './matrix.js'
-import { lockEnabled, unlock, onResume, isNative, startNativePush, clearNativeNotifications } from './native.js'
+import { lockEnabled, unlock, onResume, isNative, startNativePush, clearNativeNotifications, tapToDismissKeyboard } from './native.js'
 import { buildModel, suggestions, previewText, autoMerges, applyAutoMerges } from './people.js'
 import { networkInfo } from './networks.js'
 import Login from './ui/Login.jsx'
@@ -122,6 +122,7 @@ function Main({ session, onLogout }) {
   const route = useHashRoute()
   const [wide, setWide] = useState(() => matchMedia('(min-width: 900px)').matches)
   useEdgeSwipeBack(!!route.view && route.view !== 'inbox' && !wide)
+  useEffect(() => tapToDismissKeyboard(), [])
   const updateReady = useUpdateCheck()
 
   useEffect(() => {

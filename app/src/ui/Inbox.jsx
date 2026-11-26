@@ -53,13 +53,29 @@ export default function Inbox({ ctx, selected }) {
       </TopBar>
       <StatusLine client={client} />
       <div className="inbox-tools">
+        {/* two rows so everything fits: what to show, then which app */}
         <div className="chips">
-          {['all', 'unread', ...nets, 'groups'].map((f) => (
-            <button key={f} className={`chip ${['all', 'unread', 'groups'].includes(f) ? '' : 'netchip'} ${filter === f ? 'on' : ''}`} onClick={() => setFilter(filter === f && f !== 'all' ? 'all' : f)} aria-pressed={filter === f}>
-              {f === 'all' ? 'All' : f === 'unread' ? 'Unread' : f === 'groups' ? 'Groups' : <NetBadge net={f} />}
+          {['all', 'unread', 'groups'].map((f) => (
+            <button key={f} className={`chip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(filter === f && f !== 'all' ? 'all' : f)} aria-pressed={filter === f}>
+              {f === 'all' ? 'All' : f === 'unread' ? 'Unread' : 'Groups'}
             </button>
           ))}
+          <button className="chip" onClick={() => go('lists')}>Lists{listCount ? <span className="chip-n">{listCount}</span> : null}</button>
+          {archivedCount > 0 && (
+            <button className={`chip ${filter === 'archived' ? 'on' : ''}`} onClick={() => setFilter(filter === 'archived' ? 'all' : 'archived')} aria-pressed={filter === 'archived'}>
+              Archived{archivedUnread > 0 ? <span className="chip-n unread">{archivedUnread}</span> : <span className="chip-n">{archivedCount}</span>}
+            </button>
+          )}
         </div>
+        {nets.length > 1 && (
+          <div className="chips nets-row">
+            {nets.map((f) => (
+              <button key={f} className={`chip netchip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(filter === f ? 'all' : f)} aria-pressed={filter === f}>
+                <NetBadge net={f} />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {sugg.length > 0 && (
         <button className="banner" onClick={() => go('merge')}>
@@ -70,12 +86,6 @@ export default function Inbox({ ctx, selected }) {
       <ul className="list">
         {filter === 'archived' && (
           <li><button className="archived-row" onClick={() => setFilter('all')}><Icon name="back" size={18} /> <b>Archived</b><span className="muted"> · back to all chats</span></button></li>
-        )}
-        {filter === 'all' && !q && archivedCount > 0 && (
-          <li><button className="archived-row" onClick={() => setFilter('archived')}><Icon name="archive" size={20} /> <span>Archived</span>{archivedUnread > 0 && <span className="badge quiet" aria-label={`${archivedUnread} unread`}>{archivedUnread}</span>}<span className="archived-count">{archivedCount}</span></button></li>
-        )}
-        {filter === 'all' && !q && (
-          <li><button className="archived-row" onClick={() => go('lists')}><Icon name="people" size={20} /> <span>Lists</span><span className="archived-count">{listCount || ''}</span></button></li>
         )}
         {active.map((i) => <Row key={i.key} client={client} i={i} selected={selected} />)}
         {client.synced && empty.length > 0 && (

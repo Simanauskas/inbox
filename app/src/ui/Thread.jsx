@@ -299,7 +299,6 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
           {status && status !== 'failed' && <span className={`ticks ${status}`} title={TICK_TITLE[status]}>{TICKS[status]}</span>}
         </span>
       </div>
-      {seenHere && <div className="seen">Seen</div>}
       {ev.status === 'failed' && (
         <button className="failed" onClick={() => client.retry(roomId, ev.event_id).catch(() => {})}>Not sent. Tap to retry</button>
       )}
@@ -317,11 +316,11 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
             </div>
           )}
           <div className="act-row tools">
-            <button onClick={onReply} aria-label="Reply" title="Reply"><Icon name="reply" size={18} /></button>
-            {onEdit && <button onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={18} /></button>}
-            {!deleted && <button onClick={onForward} aria-label="Forward" title="Forward"><Icon name="forward" size={18} /></button>}
-            {c.body && !deleted && <button onClick={() => navigator.clipboard?.writeText(stripReply(c.body))} aria-label="Copy" title="Copy"><Icon name="copy" size={18} /></button>}
-            {onDelete && !deleted && <button className="danger" onClick={onDelete} aria-label="Delete for everyone" title="Delete for everyone"><Icon name="trash" size={18} /></button>}
+            <button onClick={onReply} aria-label="Reply" title="Reply"><Icon name="reply" size={22} /><span>Reply</span></button>
+            {onEdit && <button onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={22} /><span>Edit</span></button>}
+            {!deleted && <button onClick={onForward} aria-label="Forward" title="Forward"><Icon name="forward" size={22} /><span>Forward</span></button>}
+            {c.body && !deleted && <button onClick={() => navigator.clipboard?.writeText(stripReply(c.body))} aria-label="Copy" title="Copy"><Icon name="copy" size={22} /><span>Copy</span></button>}
+            {onDelete && !deleted && <button className="danger" onClick={onDelete} aria-label="Delete for everyone" title="Delete for everyone"><Icon name="trash" size={22} /><span>Delete</span></button>}
           </div>
         </div>
       )}

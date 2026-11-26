@@ -349,3 +349,9 @@ Not done: GIF/sticker picker, view-once media, starring messages.
   Photos open in a full-screen Viewer (pinch / double-tap zoom, drag, swipe down to close).
 - Suggestions always in correct Lithuanian WITH diacritics (or English), even though he types without.
 - No content-visibility on inbox rows (Safari left them blank once the inbox sat under a page). Thread keeps the newest message in view on resize (ResizeObserver; keyboard).
+- room_features' state key is the bridge id (e.g. "matrix.simas.fit/whatsapp"), not "": loadFeatures
+  reads the full room state and picks it out (before this, older chats never showed Edit/Delete/Poll).
+- Unnamed groups are titled with members' first names (`groupTitle`, contacts first, unknown in +N).
+- Ticks: ✓ server, ✓✓ delivered, cyan/blue ✓✓ seen — no "Seen" text. Message menu sized for
+  fingers with labelled tools. Inbox filters: row 1 All · Unread · Groups · Lists · Archived,
+  row 2 the apps. Touch: tap outside a field closes the keyboard (tapToDismissKeyboard).

@@ -107,6 +107,25 @@ export function roomTitle(room, me) {
   return cleanName((u && room.members[u]?.displayname) || u || 'Chat')
 }
 
+// A group without its own name: its members' first names, as in WhatsApp
+// ("Jonas, Ugnė, Tomas +2"), from your contacts where they're saved.
+export function groupTitle(room, me, contactIdx = null) {
+  const humans = otherMembers(room, me).filter((u) => !isBotUser(u) && u !== room.bridge?.bridgebot)
+  const names = humans.map((u) => {
+    const dn = cleanName(room.members?.[u]?.displayname || '')
+    const phone = phoneFromUser(u)
+    const c = contactMatch(contactIdx, { phone, email: emailFromUser(u), names: [dn] })?.contact
+    const full = c?.n || dn || (phone ? '+' + phone : null)
+    if (!full) return null // not known yet: counted in "+N"
+    return /^\+?\d[\d\s]+$/.test(full) ? full : full.split(' ')[0]
+  })
+  const known = names.filter(Boolean).sort((a, b) => /^\+/.test(a) - /^\+/.test(b)) // people you know first
+  if (!known.length) return roomTitle(room, me)
+  const shown = known.slice(0, known.length > 4 ? 3 : 4)
+  const rest = humans.length - shown.length
+  return rest > 0 ? `${shown.join(', ')} +${rest}` : shown.join(', ')
+}
+
 // A reaction someone added (not removed / redacted), for the chat list: WhatsApp-style
 // "Reacted 👍 to "…"" previews, and the chat moves up when someone reacts.
 export function isListReaction(ev) {
@@ -187,7 +206,7 @@ export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null)
     if (room.membership !== 'join') continue
     const kind = classifyRoom(room, me, direct)
     const remote = kind === 'dm' ? remoteUser(room, me) : null
-    const title = roomTitle(room, me)
+    const title = kind === 'group' && !room.name ? groupTitle(room, me, contactIdx) : roomTitle(room, me)
     const phone = remote ? phoneFromUser(remote) : null
     const email = remote ? emailFromUser(remote) : null
     const cm = kind === 'dm' ? contactMatch(contactIdx, { phone, email, names: [title, remote && cleanName(room.members[remote]?.displayname)] }) : null

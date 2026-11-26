@@ -138,7 +138,8 @@ function About({ client, item, save, cfg }) {
       )}
       <div className="card about-card">
         <textarea aria-label="About" rows={2} value={v} maxLength={300} placeholder={learned ? 'Add or correct anything (optional)' : 'e.g. partner · friend from tennis · client, polite'}
-          onChange={(e) => setV(e.target.value)} onBlur={() => { if (v.trim() !== current) save(setAbout(cfg, item, v)) }} />
+          onChange={(e) => setV(e.target.value)} onBlur={() => { if (v.trim() !== current) save(setAbout(cfg, item, v)) }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.blur() } }} enterKeyHint="done" />
         <p className="hint">{learned ? 'If you write here, it replaces the learned note.' : `Helps the reply suggestions answer ${first} the way you would.`}</p>
       </div>
     </>

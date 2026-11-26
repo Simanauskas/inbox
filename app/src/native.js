@@ -168,3 +168,20 @@ export async function clearNativeNotifications(roomIds) {
     if (gone.length) await PushNotifications.removeDeliveredNotifications({ notifications: gone })
   } catch {}
 }
+
+// Touch screens: tap anywhere outside a text field to put the keyboard away (there's no
+// "Done" button above it). Not inside the chat's message box area, where buttons like
+// send must keep the keyboard up.
+export function tapToDismissKeyboard() {
+  if (typeof window === 'undefined' || !matchMedia('(pointer: coarse)').matches) return () => {}
+  const field = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+  const on = (e) => {
+    const a = document.activeElement
+    if (!field(a)) return
+    const t = e.target
+    if (field(t) || t.closest?.('label, .composer, .mention-list, .attach-menu, .sheet')) return
+    a.blur()
+  }
+  document.addEventListener('touchstart', on, { capture: true, passive: true })
+  return () => document.removeEventListener('touchstart', on, { capture: true })
+}

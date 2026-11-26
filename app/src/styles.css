@@ -545,3 +545,22 @@ body.swiping .base-layer { filter: brightness(0.85); }
 .viewer-bar { position: absolute; top: calc(env(safe-area-inset-top) + 8px); left: 8px; right: 8px; display: flex; align-items: center; justify-content: space-between; color: #fff; }
 .viewer-bar .icon-btn, .viewer-bar .text-btn { color: #fff; background: rgba(0, 0, 0, 0.4); border-radius: 99px; padding: 6px 12px; }
 .viewer-hint { font-size: 13px; opacity: 0.7; }
+/* ticks say it all: ✓ on your server, ✓✓ delivered, coloured ✓✓ seen (no "Seen" text) */
+.msg.out .ticks { opacity: 0.55; }
+.msg.out .ticks.seen { color: #7ff3ff; opacity: 1; font-weight: 800; text-shadow: 0 0 1px rgba(0,0,0,.25); }
+.list-ticks { color: var(--muted); }
+.list-ticks.seen { color: #34b7f1; }
+/* message menu sized for fingers */
+.actions { padding: 6px; border-radius: 22px; gap: 4px; }
+.act-row button { min-width: 44px; min-height: 44px; font-size: 26px; padding: 4px 6px; }
+.act-row .more { font-size: 24px; }
+.act-row.tools { padding-top: 4px; gap: 2px; }
+.act-row.tools button { flex: 1; min-width: 56px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; border-radius: 12px; }
+.act-row.tools button span { font-size: 11px; font-weight: 500; }
+@media (max-width: 480px) { .act-row button { padding: 4px 4px; } .act-row.tools button { min-width: 50px; } }
+/* filters: two rows that fit the screen */
+.inbox-tools .chips { flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px 2px; }
+.inbox-tools .chips.nets-row { padding-top: 6px; padding-bottom: 6px; justify-content: space-between; }
+.chips.nets-row .chip { flex: 1; justify-content: center; padding: 4px 0; min-width: 0; max-width: 64px; }
+.chip-n { margin-left: 6px; font-size: 12px; color: var(--muted); }
+.chip-n.unread { color: #fff; background: var(--accent); border-radius: 99px; padding: 0 6px; }

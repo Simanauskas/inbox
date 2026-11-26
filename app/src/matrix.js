@@ -375,9 +375,18 @@ export class Client {
     const room = this.rooms[roomId]
     if (!room || room.featuresTried) return
     room.featuresTried = true
-    try { room.features = await this.api('GET', `/_matrix/client/v3/rooms/${enc(roomId)}/state/com.beeper.room_features`); this.emit() } catch { room.features = null }
-    try { const t = await this.api('GET', `/_matrix/client/v3/rooms/${enc(roomId)}/state/com.beeper.disappearing_timer`); room.disappearing = t?.timer ? t : null; this.emit() } catch {}
+    // the bridges file room_features under their own state key (e.g. "matrix.simas.fit/whatsapp"),
+    // so read the room's state and pick it out
+    try {
+      const st = await this.api('GET', `/_matrix/client/v3/rooms/${enc(roomId)}/state`)
+      for (const ev of st || []) {
+        if (ev.type === 'com.beeper.room_features' || ev.type === 'com.beeper.disappearing_timer' || ev.type === 'm.room.power_levels' || ev.type === 'm.room.topic') this.applyState(room, ev)
+      }
+      if (room.features === undefined) room.features = null
+      this.emit()
+    } catch { room.featuresTried = false }
   }
+
 
   // Edit one of your messages (the bridge changes it in the app too).
   edit(roomId, eventId, body) {

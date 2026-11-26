@@ -48,3 +48,9 @@ test('delete for everyone: own messages, within the app limit', () => {
   assert.equal(canDelete({ features: { delete: 2 } }, { ...ev, sender: '@x:x' }, '@me:x', t), false)
   assert.equal(canDelete({ features: null }, ev, '@me:x', t), false)
 })
+
+test('unnamed groups are titled with their members', async () => {
+  const { groupTitle } = await import('./people.js')
+  const room = { members: { '@me:x': { displayname: 'Me', membership: 'join' }, '@whatsapp_1:x': { displayname: 'Jonas Kazlauskas', membership: 'join' }, '@whatsapp_37061234567:x': { displayname: '', membership: 'join' }, '@whatsappbot:x': { displayname: 'bot', membership: 'join' } }, heroes: [], bridge: { bridgebot: '@whatsappbot:x' } }
+  assert.equal(groupTitle(room, '@me:x'), 'Jonas, +37061234567')
+})

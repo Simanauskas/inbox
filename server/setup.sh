@@ -267,6 +267,7 @@ yq -i "
   .url_preview_enabled = false |
   .experimental_features.msc2654_enabled = true |
   .experimental_features.msc3664_enabled = true |
+  .push.group_unread_count_by_room = false |
   .app_service_config_files = [$regs] |
   .ip_range_whitelist = [\"172.31.250.0/24\"] |
   .extra_well_known_client_content = {\"fit.simas.inbox.push\": {\"app_id\": \"fit.simas.inbox.web\", \"gateway_url\": \"http://sygnal:5000/_matrix/push/v1/notify\", \"vapid_public_key\": strenv(VAPID_PUBLIC_KEY)}}

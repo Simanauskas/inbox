@@ -28,11 +28,12 @@ IOS_APP = os.environ.get("IOS_APP_ID", "fit.simas.inbox.ios")
 TOKEN = re.search(r'^as_token:\s*"?([^"\s]+)"?', open(os.environ.get("AS_TOKEN_FILE", "/app/doublepuppet.yaml")).read(), re.M).group(1)
 
 ACTIVE = "fit.simas.inbox.active"
+PEOPLE = "fit.simas.inbox.people"
 RULE = "fit.simas.inbox.active."  # + room id
 
 FILTER = {
     "presence": {"not_types": ["*"]},
-    "account_data": {"types": [ACTIVE + ".*"]},
+    "account_data": {"types": [ACTIVE + ".*", PEOPLE]},
     "room": {
         "timeline": {"limit": 1, "types": ["m.room.message"]},
         "state": {"types": []},
@@ -106,10 +107,44 @@ class Quiet:
             log("left the chat: notifications back on")
 
 
+class Archive:
+    """Archived chats don't count (like WhatsApp): mark them read here on the server, so the
+    phone's badge matches the app even when no app is open. A new message after you archived
+    a chat brings it back (the app does the same), so only what came before is marked read."""
+
+    def __init__(self):
+        self.archived = {}  # room id -> archived at (ms)
+
+    def update(self, events):
+        for ev in events:
+            if ev.get("type") != PEOPLE:
+                continue
+            c = ev.get("content") or {}
+            people = c.get("people") or {}
+            out = {}
+            for key, at in (c.get("archived") or {}).items():
+                rooms = [key[2:]] if key.startswith("r:") else (people.get(key[2:], {}).get("rooms") or []) if key.startswith("p:") else []
+                for r in rooms:
+                    out[r] = max(out.get(r, 0), at or 0)
+            self.archived = out
+
+    def mark_read(self, rid):
+        at = self.archived.get(rid)
+        if not at:
+            return False
+        last = matrix("GET", f"/_matrix/client/v3/rooms/{q(rid)}/messages", params={"dir": "b", "limit": "1"}).get("chunk", [])
+        if not last or last[0].get("origin_server_ts", 0) > at:
+            return False  # something new since you archived it: it's back in the inbox
+        eid = last[0]["event_id"]
+        matrix("POST", f"/_matrix/client/v3/rooms/{q(rid)}/read_markers", {"m.fully_read": eid, "m.read": eid})
+        return True
+
+
 def main():
     since = None
     notified = set()  # chats with notifications you haven't read yet
     quiet = Quiet()
+    archive = Archive()
     while True:
         try:
             quiet.apply()  # also drops a pause the app stopped renewing
@@ -119,6 +154,7 @@ def main():
                 params["since"] = since
             res = matrix("GET", "/_matrix/client/v3/sync", params=params)
             quiet.update((res.get("account_data") or {}).get("events", []))
+            archive.update((res.get("account_data") or {}).get("events", []))
             quiet.apply()
             read = []
             for rid, r in (res.get("rooms", {}).get("join") or {}).items():
@@ -126,6 +162,9 @@ def main():
                 mine = any(USER in (types.get("m.read") or {}) or USER in (types.get("m.read.private") or {})
                            for ev in (r.get("ephemeral") or {}).get("events", []) if ev.get("type") == "m.receipt"
                            for types in ev.get("content", {}).values())
+                if count and archive.mark_read(rid):
+                    log("archived chat marked read")
+                    continue
                 if count:
                     notified.add(rid)
                 if since and mine and rid in notified and not count:

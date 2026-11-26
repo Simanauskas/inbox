@@ -337,3 +337,8 @@ He wants every feature the apps offer without asking one by one. Each bridged ro
 - Pin chats (Inbox-only): people config `pinned` {key: ts}, swipe/right-click → Pin; pinned first.
 Not done: GIF/sticker picker, view-once media, starring messages.
 - Voice messages: speed button 1×/1.5×/2× (Thread.jsx Audio), remembered per device (localStorage inbox.voiceSpeed).
+- Phone badge = Synapse's count (Sygnal passes counts.unread). It counted pending invites too:
+  6 dead invites to iMessage rooms deleted in the re-import ("Can't join remote room") made it 11
+  vs 2 in the app — declined 26 Nov. `push.group_unread_count_by_room: false` (setup.sh) so the
+  badge counts messages like the app. readsync marks archived chats read server-side
+  (people config `archived`, unless a newer message arrived), so they don't count even with no app open.

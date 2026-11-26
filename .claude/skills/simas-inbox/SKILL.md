@@ -342,3 +342,9 @@ Not done: GIF/sticker picker, view-once media, starring messages.
   vs 2 in the app — declined 26 Nov. `push.group_unread_count_by_room: false` (setup.sh) so the
   badge counts messages like the app. readsync marks archived chats read server-side
   (people config `archived`, unless a newer message arrived), so they don't count even with no app open.
+- Phone layout: the Inbox stays mounted in `.base-layer` and pages render in a fixed `.page-layer`
+  over it, so edge-swipe-back drags the layer and reveals the inbox (no black), and the inbox
+  keeps its scroll. Send button preventDefaults pointerdown so the keyboard stays up (closing it
+  resized the chat = the "jerk"). useMedia starts from client.mediaCached (no photo flash).
+  Photos open in a full-screen Viewer (pinch / double-tap zoom, drag, swipe down to close).
+- Suggestions always in correct Lithuanian WITH diacritics (or English), even though he types without.

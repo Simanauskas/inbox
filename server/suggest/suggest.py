@@ -453,7 +453,10 @@ def suggest_claude(room, convo, examples):
         + (f"Some of his real past replies to similar messages (for tone; reuse one only if it truly fits):\n{ex}\n\n" if ex else "")
         + f"Understand what {name}'s last message means and what they would want back, then write three different replies:\n"
         "1. a natural, direct response to it\n2. a relevant follow-up question\n3. an offer to do something, or a next step\n"
-        "Use the conversation's language. Keep them as short as Simas writes. Don't repeat what Simas already said, "
+        "Write in Lithuanian or English, whichever the conversation is in. Always use correct spelling: Lithuanian "
+        "WITH all diacritics (ą č ę ė į š ų ū ž: \"atvažiuoju\", \"ačiū\", \"būsiu\", never \"atvaziuoju\"), even though "
+        "Simas often types without them; proper English spelling. Keep his tone, length and emoji. "
+        "Keep them as short as Simas writes. Don't repeat what Simas already said, "
         "and never invent facts (times, places, prices, plans) that aren't in the conversation.\n"
         'Output only JSON: {"replies": ["...", "...", "..."]}'
     )
@@ -485,7 +488,7 @@ def suggest(mem, room, ev):
             claude_status(DBC, False, str(e))
     lines = [f"{'Simas' if e['sender'] == USER else 'Them'}: {clean(e['content']['body'])[:200]}" for e in convo[-8:]]
     ex = "\n".join(f"Them: {t[:150]}\nSimas: {m[:120]}" for _, t, m in examples[:5])
-    lang = "English" if english else "Lithuanian (usually without diacritics, as he writes)"
+    lang = "English" if english else "Lithuanian with correct diacritics (ą č ę ė į š ų ū ž)"
     system = (
         "You write reply suggestions for Simas to send in a chat. Match his style exactly: "
         "his language choice, length, spelling, punctuation and emoji habits.\n\n"

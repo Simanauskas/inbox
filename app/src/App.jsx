@@ -247,7 +247,15 @@ function Main({ session, onLogout }) {
       </div>
     )
   }
-  return <div className="app">{updateBar}{page || <Inbox ctx={ctx} />}</div>
+  // On the phone the inbox stays drawn underneath and pages slide in over it, so swiping
+  // back shows the inbox following your finger (not a black screen) and keeps its scroll.
+  return (
+    <div className="app">
+      {updateBar}
+      <div className="base-layer" inert={page ? '' : undefined} aria-hidden={!!page}><Inbox ctx={ctx} /></div>
+      {page && <div className="page-layer">{page}</div>}
+    </div>
+  )
 }
 
 // Swipe in from the left edge to go back, like native iPhone apps (the Home Screen
@@ -269,7 +277,9 @@ function useEdgeSwipeBack(enabled) {
       const t = e.touches[0]
       if (e.touches.length !== 1 || t.clientX > 24) return
       start = { x: t.clientX, y: t.clientY, t: Date.now(), dragging: false }
-      page = document.querySelector('.page:not(.inbox)') || document.querySelector('.page')
+      page = document.querySelector('.page-layer')
+      if (!page) { start = null; return }
+      document.body.classList.add('swiping')
       // only now listen to finger moves in a way that can stop scrolling; a permanent
       // non-passive listener made every scroll in the app wait for JavaScript
       document.addEventListener('touchmove', onMove, { passive: false })
@@ -289,6 +299,7 @@ function useEdgeSwipeBack(enabled) {
     }
     const onEnd = (e) => {
       document.removeEventListener('touchmove', onMove)
+      document.body.classList.remove('swiping')
       if (!start) return
       const dx = (e.changedTouches[0]?.clientX || 0) - start.x
       const fast = dx > 60 && Date.now() - start.t < 250

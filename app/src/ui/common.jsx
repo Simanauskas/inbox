@@ -16,9 +16,11 @@ export function Avatar({ client, mxc, name, size = 44 }) {
 }
 
 export function useMedia(client, mxc, width) {
-  const [url, setUrl] = useState(null)
+  const [url, setUrl] = useState(() => client.mediaCached?.(mxc, width ? { width } : {}) || null)
   useEffect(() => {
     let live = true
+    const cached = client.mediaCached?.(mxc, width ? { width } : {})
+    if (cached) { setUrl(cached); return }
     setUrl(null)
     const p = client.mediaUrl(mxc, width ? { width, height: width } : {})
     p?.then((u) => live && setUrl(u)).catch(() => {})

@@ -97,6 +97,7 @@ export class Client {
     this.status = 'connecting' // connecting | live | offline | error
     this.synced = false
     this.media = new Map()
+    this.mediaDone = new Map() // the same, already loaded (for drawing without a flash)
     this.stopped = false
     this.onLoggedOut = null
     this.onMessage = null // (room, event) for new inbound messages after first sync
@@ -706,6 +707,10 @@ export class Client {
   }
 
   // --- media (authenticated media: needs the token, so fetch into blob URLs) ---
+  mediaCached(mxc, { width, download } = {}) {
+    return this.mediaDone?.get(`${mxc}|${width || ''}|${download ? 'd' : ''}`) || null
+  }
+
   mediaUrl(mxc, { width, height, download } = {}) {
     if (!mxc?.startsWith('mxc://')) return null
     const key = `${mxc}|${width || ''}|${download ? 'd' : ''}`
@@ -716,7 +721,7 @@ export class Client {
       : `/_matrix/client/v1/media/download/${enc(server)}/${enc(id)}`
     const p = fetch(this.baseUrl + path, { headers: { Authorization: `Bearer ${this.token}` } })
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.status))))
-      .then((b) => URL.createObjectURL(b))
+      .then((b) => { const u = URL.createObjectURL(b); this.mediaDone.set(key, u); return u })
       .catch((e) => { this.media.delete(key); throw e })
     this.media.set(key, p)
     return p

@@ -341,14 +341,73 @@ function caption(c) {
 
 function Img({ client, c, sticker }) {
   const thumb = useMedia(client, c.info?.thumbnail_url || c.url, 640)
+  const [view, setView] = useState(false)
   const w = c.info?.w || 320
   const h = c.info?.h || 240
   const ratio = Math.min(1, (sticker ? 160 : 280) / w)
   return (
-    <button className={`media ${sticker ? 'sticker' : ''}`} style={{ width: w * ratio, aspectRatio: `${w} / ${h}` }}
-      onClick={(e) => { e.stopPropagation(); client.mediaUrl(c.url, { download: true })?.then((u) => window.open(u, '_blank')) }}>
-      {thumb ? <img src={thumb} alt={c.body || ''} /> : <span className="spinner small" />}
-    </button>
+    <>
+      <button className={`media ${sticker ? 'sticker' : ''}`} style={{ width: w * ratio, aspectRatio: `${w} / ${h}` }}
+        onClick={(e) => { e.stopPropagation(); if (!sticker) setView(true) }}>
+        {thumb ? <img src={thumb} alt={c.body || ''} draggable={false} /> : <span className="spinner small" />}
+      </button>
+      {view && createPortal(<Viewer client={client} c={c} thumb={thumb} onClose={() => setView(false)} />, document.body)}
+    </>
+  )
+}
+
+// Full-screen photo: pinch or double-tap to zoom, drag to look around, swipe down or ✕ to
+// close. Long-press the photo on the iPhone to save it; "Save" downloads it elsewhere.
+function Viewer({ client, c, thumb, onClose }) {
+  const [full, setFull] = useState(() => client.mediaCached(c.url, { download: true }))
+  const [z, setZ] = useState({ s: 1, x: 0, y: 0 })
+  const [drag, setDrag] = useState(0) // swipe-down distance when not zoomed
+  const g = useRef({})
+  useEffect(() => { client.mediaUrl(c.url, { download: true })?.then(setFull).catch(() => {}) }, [c.url])
+  useEffect(() => {
+    const k = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [])
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+  function onTouchStart(e) {
+    const t = e.touches
+    if (t.length === 2) g.current = { pinch: dist(t), s: z.s }
+    else if (t.length === 1) {
+      const now = Date.now()
+      if (now - (g.current.tap || 0) < 280) { setZ(z.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 }); g.current.tap = 0; return }
+      g.current = { tap: now, x: t[0].clientX, y: t[0].clientY, ox: z.x, oy: z.y }
+    }
+  }
+  function onTouchMove(e) {
+    const t = e.touches
+    e.preventDefault()
+    if (t.length === 2 && g.current.pinch) { setZ((v) => ({ ...v, s: Math.min(5, Math.max(1, g.current.s * dist(t) / g.current.pinch)) })); return }
+    if (t.length !== 1 || g.current.x === undefined) return
+    const dx = t[0].clientX - g.current.x
+    const dy = t[0].clientY - g.current.y
+    if (z.s > 1) setZ((v) => ({ ...v, x: g.current.ox + dx, y: g.current.oy + dy }))
+    else setDrag(Math.max(0, dy))
+  }
+  function onTouchEnd() {
+    if (z.s <= 1 && drag > 120) { onClose(); return }
+    setDrag(0)
+    if (z.s < 1.05) setZ({ s: 1, x: 0, y: 0 })
+  }
+  const src = full || thumb
+  return (
+    <div className="viewer" role="dialog" aria-label="Photo" style={{ background: `rgba(0,0,0,${Math.max(0.3, 1 - drag / 400)})` }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+      onDoubleClick={() => setZ(z.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 })}>
+      {src ? <img src={src} alt={c.body || ''} style={{ transform: `translate(${z.x}px, ${z.y + drag}px) scale(${z.s})` }} />
+        : <span className="spinner" />}
+      <div className="viewer-bar">
+        <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
+        {full && !isNative && <a className="text-btn" href={full} download={c.filename || c.body || 'photo.jpg'} onClick={(e) => e.stopPropagation()}>Save</a>}
+        {isNative && <span className="viewer-hint">Hold the photo to save</span>}
+      </div>
+    </div>
   )
 }
 
@@ -742,7 +801,7 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
             }}
           />
           {text.trim() || pending.length || !canRecord
-            ? <button className="send" onClick={send} disabled={!text.trim() && !pending.length} aria-label="Send" style={color}><Icon name="send" /></button>
+            ? <button className="send" onPointerDown={(e) => e.preventDefault()} onClick={send} disabled={!text.trim() && !pending.length} aria-label="Send" style={color}><Icon name="send" /></button>
             : <button className="send mic" onClick={startVoice} aria-label="Record voice message" style={color}><Icon name="mic" /></button>}
         </div>
       )}

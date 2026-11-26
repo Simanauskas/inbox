@@ -165,3 +165,51 @@ unavailable. The app (`useWhatsAppViewing` in Thread.jsx) sends it every 30 s wh
 chat with a WhatsApp room is open, visible and focused; `client.viewing()`, never added
 to timelines. He agreed to show as online while a chat is open (may hold back WhatsApp's
 own phone notifications meanwhile).
+
+## Services besides Synapse and the bridges
+
+| Service | What | Notes |
+|---|---|---|
+| `sygnal` | push gateway (web + APNs) | custom pushkin `server/sygnal/inbox_apns.py` mounted; see push.md |
+| `readsync` | python:3.12-slim running `server/readsync/readsync.py` as @s | read-elsewhere → silent iPhone push; "chat he's in" pause rules; archived chats marked read |
+| `suggest` + `ollama` | reply suggestions, learned notes, plans | profile `suggest`; mounts the host's Claude Code versions at `/opt/claude`; see ai.md |
+| `contacts` | iCloud CardDAV ↔ phone book | `server/contacts.py --loop` |
+| cron | `backup.sh` 04:17, `push-watchdog.sh` every 5 min | setup.sh installs the watchdog |
+
+Synapse settings setup.sh keeps: `experimental_features` msc2654 (unread counts incl. muted) +
+msc3664 (reaction-to-my-message rule), `push.group_unread_count_by_room: false`, `max_upload_size` 1G,
+@s `override_ratelimit` 0/0 (admin API, stored in the DB).
+
+## Own bridge builds (`.env` image overrides; `docker compose pull` skips them)
+
+- **Messenger** `META_IMAGE=local/mautrix-meta:sky-history` ← `server/meta/build-meta.sh` +
+  `deep-history.patch`: a new encrypted chat pages back through Messenger's encrypted backup up to
+  `max_initial_messages` 10000, 3–6 s between pages (only when `params.AnchorMessage == nil`).
+- **iMessage** `IMESSAGE_IMAGE=local/mautrix-imessage:sky` ← `server/imessage/build-imessage.sh` +
+  `full-history.patch` (paginate, skip emoji-less tapbacks, carry on past failures, as_token double
+  puppet) + `voice-memo.patch` (MP4/WebM voice → ALAC CAF).
+- **WhatsApp** `WHATSAPP_IMAGE=local/mautrix-whatsapp:sky` ← `server/whatsapp/build-whatsapp.sh` +
+  `viewing.patch`.
+Each script pins the upstream commit (`*_REV`). Bridge config switches set by setup.sh include
+WhatsApp `network.extev_polls: true` (real polls), Telegram `network.sync.update_limit 300 /
+create_limit 200` + `extev_polls: true`, Messenger `max_initial_messages 10000`, iMessage full history.
+
+## History and missing chats
+
+- A bridge can add history **only when it creates a chat** (normal Synapse, no batch sending).
+  Refilling = rebuild the chat (delete its bridge DB rows + room link, recreate, swap room ids in
+  `fit.simas.inbox.people`, leave the old room).
+- Done: Messenger 196 encrypted DMs (~18.9k msgs; 356 old media 403 = deleted by Meta), iMessage/SMS
+  721 chats (35.9k msgs, real dates), Instagram via cookies (Safari private window → Copy as cURL).
+- **Missing chat**: in the bridge bot's management room (find the 2-member room with e.g.
+  `@facebookbot`, no `m.bridge`): `search <name>` → `start-chat <id>` creates it with history.
+- Messenger chats switched to encryption ("e2ee_cutover" in the logs) can come back with **no
+  history** even with the backup PIN entered (the PIN *is* entered: logs show "Uploaded sent message
+  to encrypted history"). Source for those: his Facebook "Download your information" (JSON) and
+  Messenger's "Download secure storage data", copied to `/root/server/imports/` (root-only).
+- **Telegram** first created only 15 chats. To re-run its chat sync: stop the bridge, set
+  `user_login.metadata.takeout_portal_crawl_done` to false in the `telegram` DB, start it
+  (26 Nov: 15 → 79 chats).
+- Dead invites (rooms deleted in a rebuild) count in the phone badge: decline them.
+- Recordings/screens: he sends iPhone screen recordings; cut them into frame sheets with
+  `linuxserver/ffmpeg` (`fps=2,scale=300:-1,tile=8x3`).

@@ -336,3 +336,4 @@ He wants every feature the apps offer without asking one by one. Each bridged ro
   RequestBanner: Accept (com.beeper.accept_message_request) / Delete (delete_chat from_message_request).
 - Pin chats (Inbox-only): people config `pinned` {key: ts}, swipe/right-click → Pin; pinned first.
 Not done: GIF/sticker picker, view-once media, starring messages.
+- Voice messages: speed button 1×/1.5×/2× (Thread.jsx Audio), remembered per device (localStorage inbox.voiceSpeed).

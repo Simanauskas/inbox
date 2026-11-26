@@ -391,11 +391,33 @@ function Video({ client, c }) {
   )
 }
 
+// Voice speed (1× → 1.5× → 2×, like WhatsApp), remembered on this device for every voice message.
+const SPEEDS = [1, 1.5, 2]
+const savedSpeed = () => { try { const v = +localStorage.getItem('inbox.voiceSpeed'); return SPEEDS.includes(v) ? v : 1 } catch { return 1 } }
+let voiceSpeed = savedSpeed()
+const speedListeners = new Set()
+
 function Audio({ client, c }) {
   const [src, setSrc] = useState(null)
+  const [speed, setSpeed] = useState(voiceSpeed)
+  const el = useRef(null)
   useEffect(() => { client.mediaUrl(c.url, { download: true })?.then(setSrc).catch(() => {}) }, [c.url])
+  useEffect(() => { const on = (v) => setSpeed(v); speedListeners.add(on); return () => speedListeners.delete(on) }, [])
+  useEffect(() => { if (el.current) { el.current.playbackRate = speed; el.current.defaultPlaybackRate = speed } }, [speed, src])
   const voice = c['org.matrix.msc3245.voice'] !== undefined
-  return <div className="audio">{voice ? '🎤' : '🎵'} {src ? <audio src={src} controls preload="metadata" onClick={(e) => e.stopPropagation()} /> : <span className="spinner small" />}</div>
+  function nextSpeed(e) {
+    e.stopPropagation()
+    voiceSpeed = SPEEDS[(SPEEDS.indexOf(voiceSpeed) + 1) % SPEEDS.length]
+    try { localStorage.setItem('inbox.voiceSpeed', String(voiceSpeed)) } catch {}
+    for (const fn of speedListeners) fn(voiceSpeed)
+  }
+  return (
+    <div className="audio">
+      {voice ? '🎤' : '🎵'}
+      {src ? <audio ref={el} src={src} controls preload="metadata" onClick={(e) => e.stopPropagation()} onPlay={(e) => { e.currentTarget.playbackRate = voiceSpeed }} /> : <span className="spinner small" />}
+      {src && <button className="speed" onClick={nextSpeed} aria-label={`Playback speed ${speed}×`}>{speed}×</button>}
+    </div>
+  )
 }
 
 function FileLink({ client, c }) {

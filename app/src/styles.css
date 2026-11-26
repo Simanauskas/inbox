@@ -529,3 +529,4 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 .setting-row + .setting-row { border-top: 1px solid var(--line); }
 .setting-row.danger { color: var(--danger); }
 .setting-row select { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
+.audio .speed { min-width: 40px; padding: 4px 8px; border-radius: 99px; font: inherit; font-size: 13px; font-weight: 700; background: color-mix(in srgb, currentColor 15%, transparent); color: inherit; border: 0; }

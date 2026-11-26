@@ -6,12 +6,18 @@ push listing that chat; the app removes those notifications from the lock screen
 Notification Centre. Only chats that actually notified are sent, because iOS limits
 how many silent pushes an app gets.
 
+Also: while you're active in a chat on some device (the app renews account data
+"fit.simas.inbox.active.<device>" every ~20 s), no device is notified for that chat.
+This keeps a "don't notify" push rule for it and removes the rule as soon as the app
+stops renewing (you left the chat, went idle, the Mac went to sleep).
+
 The Mac web app needs nothing from here: it's open, sees the receipt and closes them itself.
 """
 import json
 import os
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -21,9 +27,12 @@ SYGNAL = os.environ.get("SYGNAL", "http://sygnal:5000/_matrix/push/v1/notify")
 IOS_APP = os.environ.get("IOS_APP_ID", "fit.simas.inbox.ios")
 TOKEN = re.search(r'^as_token:\s*"?([^"\s]+)"?', open(os.environ.get("AS_TOKEN_FILE", "/app/doublepuppet.yaml")).read(), re.M).group(1)
 
+ACTIVE = "fit.simas.inbox.active"
+RULE = "fit.simas.inbox.active."  # + room id
+
 FILTER = {
     "presence": {"not_types": ["*"]},
-    "account_data": {"not_types": ["*"]},
+    "account_data": {"types": [ACTIVE + ".*"]},
     "room": {
         "timeline": {"limit": 1, "types": ["m.room.message"]},
         "state": {"types": []},
@@ -60,15 +69,57 @@ def tell_iphone(rooms):
         r.read()
 
 
+def q(s):
+    return urllib.parse.quote(s, safe="")
+
+
+class Quiet:
+    """The "don't notify" rules for chats you're active in right now."""
+
+    def __init__(self):
+        self.devices = {}  # account data type -> {"rooms": [...], "until": ms}
+        self.rules = None  # room ids that have our rule on the server
+
+    def update(self, events):
+        for ev in events:
+            if ev.get("type", "").startswith(ACTIVE + "."):
+                self.devices[ev["type"]] = ev.get("content") or {}
+
+    def apply(self):
+        now = time.time() * 1000
+        want = {r for d in self.devices.values() if (d.get("until") or 0) > now for r in (d.get("rooms") or []) if isinstance(r, str)}
+        if self.rules is None:  # first time: whatever we left behind last run
+            rules = matrix("GET", "/_matrix/client/v3/pushrules/").get("global", {}).get("override", [])
+            self.rules = {r["rule_id"][len(RULE):] for r in rules if r["rule_id"].startswith(RULE)}
+        for room in want - self.rules:
+            matrix("PUT", f"/_matrix/client/v3/pushrules/global/override/{q(RULE + room)}",
+                   {"conditions": [{"kind": "event_match", "key": "room_id", "pattern": room}], "actions": []})
+            self.rules.add(room)
+            log("you're in a chat: its notifications are paused")
+        for room in self.rules - want:
+            try:
+                matrix("DELETE", f"/_matrix/client/v3/pushrules/global/override/{q(RULE + room)}")
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+            self.rules.discard(room)
+            log("left the chat: notifications back on")
+
+
 def main():
     since = None
     notified = set()  # chats with notifications you haven't read yet
+    quiet = Quiet()
     while True:
         try:
-            params = {"filter": json.dumps(FILTER), "timeout": "30000"}
+            quiet.apply()  # also drops a pause the app stopped renewing
+            # short waits so an expired pause ends within seconds
+            params = {"filter": json.dumps(FILTER), "timeout": "10000"}
             if since:
                 params["since"] = since
             res = matrix("GET", "/_matrix/client/v3/sync", params=params)
+            quiet.update((res.get("account_data") or {}).get("events", []))
+            quiet.apply()
             read = []
             for rid, r in (res.get("rooms", {}).get("join") or {}).items():
                 count = (r.get("unread_notifications") or {}).get("notification_count")

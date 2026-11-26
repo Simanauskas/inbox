@@ -284,3 +284,8 @@ these images. Details and gotchas: `references/server.md`.
   (`ensureReactionRule`). Group info → Notifications → "All reactions" adds a per-room underride
   `fit.simas.inbox.reactions-all.<roomId>` before it (still under mute, which is a room rule).
 - Archived chats are marked read (App.jsx) so the server-counted phone badge matches the Mac.
+- While he's active in a chat (looking.js), the app renews account data
+  `fit.simas.inbox.active.<deviceId>` {rooms, until: now+90 s} every ~20 s; readsync keeps an
+  override "don't notify" rule `fit.simas.inbox.active.<roomId>` while any device's `until` is in
+  the future, so no device buzzes for the chat he's typing in, and drops it when renewals stop
+  (idle 1 min, left the chat, Mac asleep). mutedRoomIds ignores these rules.

@@ -28,6 +28,9 @@ export const VIEWING_TYPE = 'fit.simas.inbox.viewing'
 export const PEOPLE_TYPE = 'fit.simas.inbox.people'
 export const SETTINGS_TYPE = 'fit.simas.inbox.settings'
 const REACTION_RULE = 'fit.simas.inbox.reaction'
+// "I'm in this chat right now", renewed every 20 s while you're active in it
+const ACTIVE_TYPE = 'fit.simas.inbox.active'
+const ACTIVE_FOR_MS = 90_000
 const allReactionsRule = (roomId) => `fit.simas.inbox.reactions-all.${roomId}`
 
 const txnId = () => `inbox${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -86,6 +89,7 @@ export class Client {
     this.baseUrl = session.baseUrl
     this.userId = session.userId
     this.token = session.accessToken
+    this.deviceId = session.deviceId || 'web'
     this.rooms = {}
     this.accountData = {}
     this.version = 0
@@ -465,6 +469,11 @@ export class Client {
     this.quietKey = key
     this.quietAt = Date.now()
     idbSet('quietRooms', { rooms: roomIds, at: Date.now() }).catch(() => {})
+    // Tell the server too (server/readsync turns it into a "don't notify" rule for these chats
+    // on every device, and drops it if this stops being renewed, e.g. the Mac went to sleep).
+    const until = roomIds.length ? Date.now() + ACTIVE_FOR_MS : 0
+    this.api('PUT', `/_matrix/client/v3/user/${enc(this.userId)}/account_data/${ACTIVE_TYPE}.${enc(this.deviceId)}`,
+      { rooms: roomIds, until }, { keepalive: true }).catch(() => {})
   }
 
   // Remove the old "chat is open" push rules, left by any device's older app version.

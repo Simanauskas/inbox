@@ -124,8 +124,8 @@ export function mutedRoomIds(accountData) {
   const ids = new Set((g.room || []).filter(quiet).map((r) => r.rule_id))
   for (const r of g.override || []) {
     const c = r.conditions || []
-    // inbox-open-…: Inbox's own temporary "chat is open" rule, not a real mute
-    if (quiet(r) && !r.rule_id?.startsWith('inbox-open-') && c.length === 1 && c[0].kind === 'event_match' && c[0].key === 'room_id') ids.add(c[0].pattern)
+    // inbox-open-… / fit.simas.inbox.active.…: Inbox's own temporary "you're in this chat" rules, not a real mute
+    if (quiet(r) && !r.rule_id?.startsWith('inbox-open-') && !r.rule_id?.startsWith('fit.simas.inbox.active.') && c.length === 1 && c[0].kind === 'event_match' && c[0].key === 'room_id') ids.add(c[0].pattern)
   }
   return ids
 }

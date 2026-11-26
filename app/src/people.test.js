@@ -318,6 +318,7 @@ test('group reactions say who; Inbox\'s own "chat is open" rule is not a mute', 
   assert.equal(previewText(react, ME, g, false), 'Reacted ❤️ to "Kaip isivaizduoju"')
   const ad = { 'm.push_rules': { global: { override: [
     { rule_id: 'inbox-open-!a', actions: [], conditions: [{ kind: 'event_match', key: 'room_id', pattern: '!a' }] },
+    { rule_id: 'fit.simas.inbox.active.!c', actions: [], conditions: [{ kind: 'event_match', key: 'room_id', pattern: '!c' }] },
     { rule_id: 'mute-b', actions: [], conditions: [{ kind: 'event_match', key: 'room_id', pattern: '!b' }] },
   ] } } }
   assert.deepEqual([...mutedRoomIds(ad)], ['!b'])

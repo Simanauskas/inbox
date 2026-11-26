@@ -296,3 +296,14 @@ these images. Details and gotchas: `references/server.md`.
   Prompt = style.md + the person's "About" note (contact page, people[pid].about) + a few past
   replies; three purposes (respond / follow-up question / offer). Falls back to gemma3:4b when there's
   no token or Claude fails. Plan detection still uses the local model.
+- Claude sign-in watch: suggest.py `claude_check` (daily, haiku "ok") + every suggestion record
+  account data `fit.simas.inbox.status` {claude: {ok, error, expires≈first seen+365d, configured}};
+  `alert()` sends a notification to all his pushers through Sygnal (type fit.simas.inbox.alert)
+  when it fails or is <14 days from the year. Settings → Reply suggestions shows status and the two
+  renew commands (setup-token, then save to .env replacing the old line); App shows a top bar.
+  setup-token tokens can't auto-renew (needs a browser sign-in).
+- Learned notes: `--profiles N` / daily 5 in the loop — Claude reads the last 80 messages of the
+  people he talks with most (by learned exchanges) and writes {category, note} into account data
+  `fit.simas.inbox.profiles` {rooms: {roomId: …}}, refreshed after 30 days. Suggestions use his own
+  About note, else the learned one. Contact page shows it. Categories (for grouping later):
+  partner, family, close friend, friend, tennis, sport, work, client, service, other.

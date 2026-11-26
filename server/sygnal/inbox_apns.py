@@ -31,6 +31,8 @@ def _strip_reply(body: str) -> str:
 
 def body_of(n) -> Optional[str]:
     c: Dict[str, Any] = n.content or {}
+    if n.type == "fit.simas.inbox.alert":  # from the server itself (e.g. Claude sign-in expired)
+        return str(c.get("body") or "Inbox needs attention")
     if n.type == "m.reaction":
         key = (c.get("m.relates_to") or {}).get("key")
         return f"Reacted {key} to your message" if key else "Reacted to your message"

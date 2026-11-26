@@ -8,14 +8,14 @@ import Inbox from './ui/Inbox.jsx'
 import Thread from './ui/Thread.jsx'
 import Person from './ui/Person.jsx'
 import Merge from './ui/Merge.jsx'
-import Settings from './ui/Settings.jsx'
+import Settings, { claudeTrouble } from './ui/Settings.jsx'
 import Search from './ui/Search.jsx'
 import { ListsPage, ListPage } from './ui/Lists.jsx'
 import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from './push.js'
 import { idbGet, idbDel, idbSet } from './idb.js'
 import { indexContacts } from './contacts.js'
 import { Icon } from './ui/common.jsx'
-import { back } from './router.js'
+import { back, go } from './router.js'
 
 // Your phone book: the server puts it (from BlueBubbles on the Mac) in your
 // Matrix media and points to it from account data fit.simas.inbox.contacts.
@@ -234,7 +234,10 @@ function Main({ session, onLogout }) {
   else if (route.view === 'list' && route.arg) page = <ListPage key={route.arg} ctx={ctx} id={route.arg} />
   else if ((route.view === 't' || route.view === 'p') && !client.synced) page = <div className="empty-pane"><div className="spinner" /></div>
 
-  const updateBar = updateReady && <button className="update-bar" onClick={() => location.reload()}>A new version of Inbox is ready. <b>Update</b></button>
+  const trouble = claudeTrouble(client)
+  const updateBar = updateReady ? <button className="update-bar" onClick={() => location.reload()}>A new version of Inbox is ready. <b>Update</b></button>
+    : trouble === 'expired' && route.view !== 'settings' ? <button className="update-bar" onClick={() => go('settings')}>Reply suggestions: the Claude sign-in needs renewing. <b>How</b></button>
+    : null
   if (wide) {
     return (
       <div className="app split">

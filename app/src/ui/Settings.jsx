@@ -131,6 +131,9 @@ export default function Settings({ ctx }) {
           <p className="hint">After that, new messages go to the person's default app.</p>
         </div>
 
+        <h3 className="section">Reply suggestions</h3>
+        <SuggestionsStatus client={client} />
+
         <h3 className="section">Reactions</h3>
         <Reactions client={client} cfg={cfg} />
 
@@ -189,6 +192,42 @@ function LockSetting() {
         <span>Lock with {kind}</span>
       </label>
       <p className="muted small">Asks when you open Inbox and after it's been in the background for a minute.</p>
+    </div>
+  )
+}
+
+// Reply suggestions are written by Claude on your subscription. The sign-in token lasts a
+// year and can only be renewed by signing in again; the server checks it daily (suggest.py).
+export const STATUS_TYPE = 'fit.simas.inbox.status'
+export function claudeTrouble(client) {
+  const st = client.accountData[STATUS_TYPE]?.claude
+  if (!st?.configured) return null
+  if (!st.ok) return 'expired'
+  if (st.expires && st.expires - Date.now() < 14 * 86400_000) return 'expiring'
+  return null
+}
+
+const RENEW_1 = 'ssh -t inbox /root/.local/bin/claude setup-token'
+const RENEW_2 = `ssh -t inbox 'read -rsp "Paste token: " T; echo; [ -n "$T" ] && sed -i "/^SUGGEST_CLAUDE_TOKEN=/d" /root/server/.env && echo "SUGGEST_CLAUDE_TOKEN=$T" >> /root/server/.env && cd /root/server && docker compose up -d suggest && echo "Saved and restarted ✓"'`
+
+function SuggestionsStatus({ client }) {
+  const st = client.accountData[STATUS_TYPE]?.claude
+  const trouble = claudeTrouble(client)
+  const copy = (t) => navigator.clipboard?.writeText(t).catch(() => {})
+  const date = (ms) => new Date(ms).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })
+  return (
+    <div className="card">
+      {!st?.configured && <p className="muted">Written by the free model on your server.</p>}
+      {st?.configured && !trouble && <p>✓ Written by Claude on your subscription. The sign-in is good until about {date(st.expires)}; you'll be told two weeks before.</p>}
+      {trouble === 'expiring' && <p>⚠️ The Claude sign-in runs out around <b>{date(st.expires)}</b>. Renew it with the two commands below.</p>}
+      {trouble === 'expired' && <p className="error">The Claude sign-in stopped working{st.error ? ` (${st.error.slice(0, 80)})` : ''}. Until it's renewed, the free model writes the suggestions.</p>}
+      {trouble && <>
+        <p className="small">On your Mac, in Terminal: 1) sign in and copy the token it prints</p>
+        <pre className="cmd" onClick={() => copy(RENEW_1)}>{RENEW_1}</pre>
+        <p className="small">2) save it on the server (paste when asked)</p>
+        <pre className="cmd" onClick={() => copy(RENEW_2)}>{RENEW_2}</pre>
+        <p className="hint">Tap a command to copy it.</p>
+      </>}
     </div>
   )
 }

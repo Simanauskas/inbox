@@ -117,18 +117,25 @@ function Contact({ ctx, item }) {
 
 // Who this person is to you, in a few words: the reply suggestions use it
 // ("partner, warm", "client, polite", "tennis buddy").
-function About({ item, save, cfg }) {
+function About({ client, item, save, cfg }) {
   const current = (item.personId && cfg?.people?.[item.personId]?.about) || ''
   const [v, setV] = useState(current)
   useEffect(() => { if (document.activeElement?.getAttribute('aria-label') !== 'About') setV(current) }, [current])
   const first = item.name.split(' ')[0]
+  const learned = item.rooms.map((id) => client.accountData['fit.simas.inbox.profiles']?.rooms?.[id]).find((p) => p?.note)
   return (
     <>
       <h3 className="section">About {first}</h3>
+      {learned && (
+        <div className="card learned">
+          <p><span className="tag">{learned.category}</span> {learned.note}</p>
+          <p className="hint">Learned from your chats{current ? ' — your own note below is used instead' : ''}.</p>
+        </div>
+      )}
       <div className="card about-card">
-        <textarea aria-label="About" rows={2} value={v} maxLength={300} placeholder={`e.g. partner · friend from tennis · client, polite`}
+        <textarea aria-label="About" rows={2} value={v} maxLength={300} placeholder={learned ? 'Add or correct anything (optional)' : 'e.g. partner · friend from tennis · client, polite'}
           onChange={(e) => setV(e.target.value)} onBlur={() => { if (v.trim() !== current) save(setAbout(cfg, item, v)) }} />
-        <p className="hint">Helps the reply suggestions answer {first} the way you would.</p>
+        <p className="hint">{learned ? 'If you write here, it replaces the learned note.' : `Helps the reply suggestions answer ${first} the way you would.`}</p>
       </div>
     </>
   )

@@ -288,10 +288,157 @@ def person_note(room):
         except Exception:
             pass
         _people["at"] = time.time()
+        try:
+            _people["learned"] = matrix("GET", f"/_matrix/client/v3/user/{q(USER)}/account_data/fit.simas.inbox.profiles").get("rooms", {})
+        except Exception:
+            pass
+    learned = _people.get("learned") or {}
     for p in (_people["cfg"].get("people") or {}).values():
         if room in (p.get("rooms") or []):
-            return (p.get("name") or "").split(" ")[0] or None, (p.get("about") or "").strip()[:300]
-    return None, ""
+            about = (p.get("about") or "").strip()[:300]
+            if not about:  # what Claude learned from any of this person's chats
+                notes = [learned[r]["note"] for r in p.get("rooms") or [] if learned.get(r, {}).get("note")]
+                about = notes[0] if notes else ""
+            return (p.get("name") or "").split(" ")[0] or None, about
+    return None, (learned.get(room) or {}).get("note", "")
+
+
+# --- Claude sign-in health: tell him before/when the token stops working ------------------
+# `claude setup-token` tokens last a year and can't renew themselves (renewing needs him to
+# sign in in a browser). So: a daily check, a status in account data the app shows, and a
+# notification on his devices when it fails or is two weeks from its year.
+
+STATUS = "fit.simas.inbox.status"
+TOKEN_DAYS = 365
+SYGNAL = os.environ.get("SYGNAL", "http://sygnal:5000/_matrix/push/v1/notify")
+AUTH_ERR = re.compile(r"401|authenticat|expired|invalid.*token|oauth|log ?in", re.I)
+
+
+def kv(c, k, v=None):
+    if v is None:
+        row = c.execute("select v from kv where k=?", (k,)).fetchone()
+        return row[0] if row else None
+    c.execute("insert or replace into kv values (?, ?)", (k, str(v)))
+    c.commit()
+
+
+def alert(c, kind, body, every_h=24):
+    """A notification on all his devices (through Sygnal), at most once a day per kind."""
+    last = float(kv(c, f"alert:{kind}") or 0)
+    if time.time() - last < every_h * 3600:
+        return
+    try:
+        devices = [{"app_id": p["app_id"], "pushkey": p["pushkey"], "data": p.get("data") or {}}
+                   for p in matrix("GET", "/_matrix/client/v3/pushers").get("pushers", [])]
+        if devices:
+            body_json = {"notification": {"type": "fit.simas.inbox.alert", "sender_display_name": "Inbox", "event_id": f"$inbox-alert-{kind}",
+                                          "content": {"msgtype": "m.text", "body": body}, "devices": devices}}
+            req = urllib.request.Request(SYGNAL, data=json.dumps(body_json).encode(), headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=30).read()
+        kv(c, f"alert:{kind}", time.time())
+        log(f"alert sent: {kind}")
+    except Exception as e:
+        log("couldn't send the alert:", e)
+
+
+def claude_status(c, ok, error=None):
+    import hashlib
+    if c is None:
+        return
+    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
+    h = hashlib.sha256(token.encode()).hexdigest()[:16] if token else ""
+    if h and kv(c, "claude_token") != h:  # a new token: its year starts now
+        kv(c, "claude_token", h)
+        kv(c, "claude_token_since", time.time())
+    since = float(kv(c, "claude_token_since") or time.time())
+    expires = since + TOKEN_DAYS * 86400
+    st = {"ok": ok, "error": (error or "")[:200], "checked": int(time.time() * 1000), "expires": int(expires * 1000), "configured": bool(token)}
+    prev = getattr(claude_status, "last", None)
+    if prev is None or prev["ok"] != ok or time.time() * 1000 - prev["checked"] > 6 * 3600_000:
+        try:
+            matrix("PUT", f"/_matrix/client/v3/user/{q(USER)}/account_data/{STATUS}", {"claude": st})
+        except Exception:
+            pass
+        claude_status.last = st
+    if token and not ok and AUTH_ERR.search(error or ""):
+        alert(c, "claude_expired", "Claude sign-in for reply suggestions stopped working. Open Inbox → Settings to renew it (2 commands).")
+    elif token and ok and expires - time.time() < 14 * 86400:
+        days = max(0, int((expires - time.time()) / 86400))
+        alert(c, "claude_expiring", f"Claude sign-in for reply suggestions runs out in about {days} days. Inbox → Settings shows how to renew.", every_h=72)
+
+
+def claude_check(c):
+    """Once a day: does the token still work? (A tiny request on the cheapest model.)"""
+    if not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or claude_bin() is None:
+        return
+    if time.time() - float(kv(c, "claude_checked") or 0) < 86400:
+        return
+    kv(c, "claude_checked", time.time())
+    env = {"PATH": "/usr/bin:/bin", "HOME": "/tmp/claude-home", "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_OAUTH_TOKEN": os.environ["CLAUDE_CODE_OAUTH_TOKEN"]}
+    try:
+        r = subprocess.run([claude_bin(), "-p", "--model", "haiku", "--tools", "", "--no-session-persistence", "Reply with: ok"],
+                           capture_output=True, text=True, timeout=60, env=env)
+        claude_status(c, r.returncode == 0, None if r.returncode == 0 else (r.stderr or r.stdout))
+    except Exception as e:
+        claude_status(c, False, str(e))
+
+
+# --- Who people are to him, learned from the chats (Claude) -------------------------------
+# A short note per chat: who they likely are to Simas, the language, how he writes to them,
+# and a category (for grouping later). Used by the reply suggestions when he hasn't written
+# an "About" note himself. Stored as account data so the app can show it.
+
+PROFILES = "fit.simas.inbox.profiles"
+CATEGORIES = ["partner", "family", "close friend", "friend", "tennis", "sport", "work", "client", "service", "other"]
+
+
+def profile_for(room):
+    evs = recent(room, 80)
+    mine = sum(e["sender"] == USER for e in evs)
+    if mine < 5 or len(evs) - mine < 5:
+        return None
+    name = person_note(room)[0] or room_name(room)
+    lines = [f"{'Simas' if e['sender'] == USER else name}: {clean(e['content']['body'])[:200]}" for e in evs]
+    system = (
+        f"You read recent messages between Simas and {name} to help write replies as Simas later. "
+        f"In one or two short lines (max 200 characters) describe: who {name} most likely is to Simas, the language they "
+        "use together, and how Simas writes to them (tone, length, nicknames, emoji). Facts only from the messages; "
+        "no private details like addresses, numbers or health. "
+        f"Also pick one category from: {', '.join(CATEGORIES)}. "
+        'Output only JSON: {"category": "...", "note": "..."}'
+    )
+    out = claude(system, "\n".join(lines), timeout=90)
+    cat = out.get("category") if out.get("category") in CATEGORIES else "other"
+    note = str(out.get("note") or "").strip()[:240]
+    return {"category": cat, "note": note, "at": int(time.time() * 1000)} if note else None
+
+
+def profiles(c, limit=60, max_new=None, stale_days=30):
+    """Notes for the people he talks with most (by learned exchanges, most recent first)."""
+    if not use_claude():
+        return 0
+    try:
+        cur = matrix("GET", f"/_matrix/client/v3/user/{q(USER)}/account_data/{PROFILES}").get("rooms", {})
+    except Exception:
+        cur = {}
+    dms = set(dm_rooms())
+    rows = c.execute("select room, count(*) n, max(ts) t from pairs group by room having n >= 5 order by t desc").fetchall()
+    todo = [r for r, n, t in rows if r in dms and time.time() * 1000 - (cur.get(r, {}).get("at") or 0) > stale_days * 86400_000][:limit]
+    done = 0
+    for room in todo[: max_new or len(todo)]:
+        try:
+            p = profile_for(room)
+            claude_status(c, True)
+        except Exception as e:
+            log("profile failed:", str(e)[:120])
+            claude_status(c, False, str(e))
+            break
+        if p:
+            cur[room] = p
+            done += 1
+            matrix("PUT", f"/_matrix/client/v3/user/{q(USER)}/account_data/{PROFILES}", {"rooms": cur})
+            log(f"profile {done}/{len(todo)}: {p['category']}")
+    return done
 
 
 def suggest_claude(room, convo, examples):
@@ -329,11 +476,13 @@ def suggest(mem, room, ev):
         t = time.time()
         try:
             replies = [x for x in dict.fromkeys(suggest_claude(room, convo, examples)) if not SENSITIVE.search(x)][:3]
+            claude_status(DBC, True)
             if replies:
                 log(f"suggested with Claude in {time.time() - t:.0f}s for {room[:10]}: {len(replies)} replies")
                 return replies
         except Exception as e:
             log(f"Claude unavailable ({str(e)[:120]}), using the local model")
+            claude_status(DBC, False, str(e))
     lines = [f"{'Simas' if e['sender'] == USER else 'Them'}: {clean(e['content']['body'])[:200]}" for e in convo[-8:]]
     ex = "\n".join(f"Them: {t[:150]}\nSimas: {m[:120]}" for _, t, m in examples[:5])
     lang = "English" if english else "Lithuanian (usually without diacritics, as he writes)"
@@ -499,8 +648,14 @@ def backfill(per_room=1500):
     log(f"backfill done: {c.execute('select count(*) from pairs').fetchone()[0]} exchanges in memory")
 
 
+DBC = None  # the service's database connection (for status and alerts)
+
+
 def loop():
     c = db()
+    global DBC
+    DBC = c
+    prof_at = 0
     mem = Memory(c)
     log(f"memory: {len(mem.rows)} exchanges; model {MODEL}")
     dms = set(dm_rooms())
@@ -518,6 +673,13 @@ def loop():
         try:
             if time.time() - dms_at > 3600:
                 dms, dms_at = set(dm_rooms()), time.time()
+            claude_check(c)
+            if time.time() - prof_at > 86400:  # keep the notes fresh: a few a day
+                prof_at = time.time()
+                try:
+                    profiles(c, limit=60, max_new=5)
+                except Exception as e:
+                    log("profiles failed:", e)
             r = matrix("GET", "/_matrix/client/v3/sync", params={"filter": flt, "since": since, "timeout": "30000"}, timeout=90)
             since = r["next_batch"]
             c.execute("insert or replace into kv values ('since', ?)", (since,)); c.commit()
@@ -566,5 +728,10 @@ def loop():
 if __name__ == "__main__":
     if "--backfill" in sys.argv:
         backfill()
+    if "--profiles" in sys.argv:
+        c = db()
+        DBC = c
+        n = int(sys.argv[sys.argv.index("--profiles") + 1]) if len(sys.argv) > sys.argv.index("--profiles") + 1 else 60
+        log(f"learned notes for {profiles(c, limit=n)} people")
     if "--loop" in sys.argv:
         loop()

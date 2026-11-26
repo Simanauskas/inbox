@@ -271,3 +271,10 @@ these images. Details and gotchas: `references/server.md`.
   plain alerts: title = sender (· group), body like the web ones, thread-id = room, badge = unread.
   setup.sh adds the app to sygnal.yaml when data/sygnal/apns.p8 exists and APNS_KEY_ID /
   APNS_TEAM_ID are in .env (Team ID is Ilona's team). TestFlight uses the production APNs.
+- Read on one device → notifications gone on the others: `server/readsync/readsync.py` (service
+  `readsync`, syncs as @s) sees your receipt on a chat that had notifications and sends Sygnal a
+  `fit.simas.inbox.read` notification → InboxApnsPushkin makes it a silent background push
+  `{read_rooms}` → AppDelegate `didReceiveRemoteNotification` removes those chats' delivered
+  notifications (UIBackgroundModes remote-notification). iOS rations silent pushes and doesn't
+  wake an app you swiped away. The open web/Mac app clears its own on receipts from other devices
+  (matrix.js → onRead).

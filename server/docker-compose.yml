@@ -135,6 +135,20 @@ services:
       ollama: { condition: service_started }
     profiles: [suggest]
 
+  # When you read a chat anywhere, its notifications disappear from the iPhone (silent push).
+  readsync:
+    image: python:3.12-slim
+    restart: unless-stopped
+    command: [python, /app/readsync.py]
+    environment:
+      USER_ID: "@${ADMIN_USER}:${SERVER_NAME}"
+    volumes:
+      - ./readsync/readsync.py:/app/readsync.py:ro
+      - ./data/synapse/doublepuppet.yaml:/app/doublepuppet.yaml:ro
+    depends_on:
+      synapse: { condition: service_healthy }
+      sygnal: { condition: service_started }
+
   # Push gateway: turns Synapse's notifications into Web Push messages, so the
   # app notifies you even when it's closed.
   sygnal:

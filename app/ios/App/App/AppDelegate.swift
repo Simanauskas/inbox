@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -40,6 +41,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    // A silent push from the server when you've read chats on another device (Mac, web):
+    // take those chats' notifications off the lock screen and out of Notification Centre.
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard let rooms = userInfo["read_rooms"] as? [String], !rooms.isEmpty else {
+            completionHandler(.noData)
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { delivered in
+            let ids = delivered.filter { n in
+                guard let room = n.request.content.userInfo["room_id"] as? String else { return false }
+                return rooms.contains(room)
+            }.map { $0.request.identifier }
+            if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+            completionHandler(ids.isEmpty ? .noData : .newData)
+        }
     }
 
     func application(_ application: UIApplication,

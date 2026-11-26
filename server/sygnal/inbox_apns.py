@@ -10,9 +10,11 @@ Used from sygnal.yaml as   type: inbox_apns.InboxApnsPushkin
 """
 from typing import Any, Dict, Optional
 
+from aioapns.common import PushType
 from sygnal.apnspushkin import ApnsPushkin
 
 MAX = 1000
+READ_TYPE = "fit.simas.inbox.read"
 
 
 def _strip_reply(body: str) -> str:
@@ -58,6 +60,11 @@ def body_of(n) -> Optional[str]:
 
 class InboxApnsPushkin(ApnsPushkin):
     def _get_payload_full(self, n, device, log, send_badge_counts: bool) -> Optional[Dict[str, Any]]:
+        # "you read these chats" (from server/readsync): a silent push, the app removes
+        # their notifications from the lock screen
+        if n.type == READ_TYPE:
+            rooms = [r for r in ((n.content or {}).get("rooms") or []) if isinstance(r, str)][:50]
+            return {"aps": {"content-available": 1}, "read_rooms": rooms} if rooms else None
         body = body_of(n)
         badge = None
         if send_badge_counts and n.counts and n.counts.unread is not None:
@@ -81,3 +88,11 @@ class InboxApnsPushkin(ApnsPushkin):
         if badge is not None:
             payload["aps"]["badge"] = badge
         return payload
+
+    # Silent pushes must go as "background" with low priority, or Apple refuses them.
+    async def _send_notification(self, request):
+        aps = (request.message or {}).get("aps", {})
+        if aps.get("content-available") and "alert" not in aps:
+            request.push_type = PushType.BACKGROUND
+            request.priority = 5
+        return await super()._send_notification(request)

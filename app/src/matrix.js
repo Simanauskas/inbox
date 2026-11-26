@@ -244,7 +244,11 @@ export class Client {
         if (ev.type === 'm.typing') room.typing = ev.content.user_ids || []
         if (ev.type === 'm.receipt') {
           for (const [eid, types] of Object.entries(ev.content)) {
-            for (const uid of Object.keys(types['m.read'] || {})) room.receipts[uid] = eid
+            for (const uid of Object.keys(types['m.read'] || {})) {
+              // you read this chat on another device: clear its notifications here too
+              if (uid === this.userId && !initial && room.receipts[uid] !== eid) this.onRead?.(room.id)
+              room.receipts[uid] = eid
+            }
           }
         }
       }

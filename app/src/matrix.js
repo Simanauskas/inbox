@@ -27,6 +27,8 @@ export const VIEWING_TYPE = 'fit.simas.inbox.viewing'
 
 export const PEOPLE_TYPE = 'fit.simas.inbox.people'
 export const SETTINGS_TYPE = 'fit.simas.inbox.settings'
+const REACTION_RULE = 'fit.simas.inbox.reaction'
+const allReactionsRule = (roomId) => `fit.simas.inbox.reactions-all.${roomId}`
 
 const txnId = () => `inbox${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 
@@ -512,6 +514,37 @@ export class Client {
     const g = (this.accountData['m.push_rules'] ||= { global: {} }).global
     g.room = (g.room || []).filter((r) => r.rule_id !== roomId)
     if (muted) g.room.push({ rule_id: roomId, actions: [], enabled: true, default: false })
+    this.emit()
+  }
+
+  // Reactions notify only when they're to your own message (MSC3664 related_event_match,
+  // msc3664_enabled on the server). A chat can opt in to all reactions (see allReactions).
+  async ensureReactionRule() {
+    const want = [
+      { kind: 'event_match', key: 'type', pattern: 'm.reaction' },
+      { kind: 'im.nheko.msc3664.related_event_match', rel_type: 'm.annotation', key: 'sender', pattern: this.userId },
+    ]
+    const g = this.accountData['m.push_rules']?.global || {}
+    const cur = (g.underride || []).find((r) => r.rule_id === REACTION_RULE)
+    if (cur && JSON.stringify(cur.conditions) === JSON.stringify(want) && cur.enabled !== false) return
+    await this.api('PUT', `/_matrix/client/v3/pushrules/global/underride/${REACTION_RULE}`, { conditions: want, actions: ['notify'] }).catch(() => {})
+    await this.api('PUT', '/_matrix/client/v3/pushrules/global/override/.m.rule.reaction/enabled', { enabled: false }).catch(() => {})
+  }
+
+  allReactions(roomId) {
+    const g = this.accountData['m.push_rules']?.global || {}
+    return (g.underride || []).some((r) => r.rule_id === allReactionsRule(roomId) && r.enabled !== false)
+  }
+
+  async setAllReactions(roomId, on) {
+    const id = allReactionsRule(roomId)
+    const path = `/_matrix/client/v3/pushrules/global/underride/${enc(id)}`
+    const rule = { conditions: [{ kind: 'event_match', key: 'room_id', pattern: roomId }, { kind: 'event_match', key: 'type', pattern: 'm.reaction' }], actions: ['notify'] }
+    if (on) await this.api('PUT', path, rule, { query: { before: REACTION_RULE } })
+    else await this.api('DELETE', path).catch(() => {})
+    const g = (this.accountData['m.push_rules'] ||= { global: {} }).global
+    g.underride = (g.underride || []).filter((r) => r.rule_id !== id)
+    if (on) g.underride.unshift({ rule_id: id, ...rule, enabled: true, default: false })
     this.emit()
   }
 

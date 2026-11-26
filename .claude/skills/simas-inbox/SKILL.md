@@ -278,3 +278,9 @@ these images. Details and gotchas: `references/server.md`.
   notifications (UIBackgroundModes remote-notification). iOS rations silent pushes and doesn't
   wake an app you swiped away. The open web/Mac app clears its own on receipts from other devices
   (matrix.js → onRead).
+- Reactions notify only when they're to his own message: underride `fit.simas.inbox.reaction` =
+  type m.reaction + `im.nheko.msc3664.related_event_match` (rel_type m.annotation, sender = him);
+  needs `experimental_features.msc3664_enabled` (setup.sh). The app re-creates the rule on start
+  (`ensureReactionRule`). Group info → Notifications → "All reactions" adds a per-room underride
+  `fit.simas.inbox.reactions-all.<roomId>` before it (still under mute, which is a room rule).
+- Archived chats are marked read (App.jsx) so the server-counted phone badge matches the Mac.

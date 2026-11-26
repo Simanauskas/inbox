@@ -212,7 +212,15 @@ function Main({ session, onLogout }) {
     for (const [id, i] of Object.entries(model.info)) {
       if ((i.kind === 'connection' || i.kind === 'space') && (client.rooms[id]?.notificationCount || 0) > 0) client.markRead(id)
     }
+    // Archived chats don't count either (like WhatsApp): mark them read so the phone's badge,
+    // which the server counts, matches. Something new brings the chat back as unread.
+    for (const it of model.items) {
+      if (!it.archived) continue
+      for (const id of it.rooms) if ((client.rooms[id]?.notificationCount || 0) > 0) client.markRead(id)
+    }
   }, [model, client])
+  // reactions: notify only for reactions to your messages (unless a chat asks for all)
+  useEffect(() => { if (client.synced) client.ensureReactionRule() }, [client, client.synced])
 
   const ctx = { client, model, sugg, findItem, wide, route, version, onLogout }
   let page = null

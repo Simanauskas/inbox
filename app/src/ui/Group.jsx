@@ -54,6 +54,9 @@ export default function GroupPage({ ctx, item }) {
 
         {msg && <p className={msg.err ? 'error' : 'hint'}>{msg.err || msg.ok}</p>}
 
+        <h3 className="section">Notifications</h3>
+        <ReactionSetting client={client} roomId={roomId} />
+
         <h3 className="section">{members.length} members</h3>
         {members.length > 8 && <input className="search" placeholder="Search members" value={q} onChange={(e) => setQ(e.target.value)} />}
         <ul className="card-list members">
@@ -262,5 +265,23 @@ function InviteLink({ client, room }) {
         </span>
       </button>
     </li>
+  )
+}
+
+// Reactions in a group: by default only to your own messages; this chat can ask for all.
+function ReactionSetting({ client, roomId }) {
+  const all = client.allReactions(roomId)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const set = async (on) => { setBusy(true); setErr(null); try { await client.setAllReactions(roomId, on) } catch (e) { setErr(e.message) } setBusy(false) }
+  return (
+    <div className="card reaction-setting">
+      <p className="muted small">Notify me about reactions</p>
+      <div className="seg" role="radiogroup" aria-label="Reactions">
+        <button role="radio" aria-checked={!all} className={!all ? 'on' : ''} disabled={busy} onClick={() => all && set(false)}>To my messages</button>
+        <button role="radio" aria-checked={all} className={all ? 'on' : ''} disabled={busy} onClick={() => !all && set(true)}>All reactions</button>
+      </div>
+      {err && <p className="error small">{err}</p>}
+    </div>
   )
 }

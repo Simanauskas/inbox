@@ -123,7 +123,8 @@ export class Client {
 
   // --- sync loop ---
   async start() {
-    this.quietRooms([], true) // drop "chat is open" rules left over from last time
+    this.dropOpenChatRules()
+    this.quietRooms([])
     // Show what we had last time straight away, then catch up from there.
     let since = await this.loadCache()
     let backoff = 1000
@@ -449,22 +450,28 @@ export class Client {
   // cover the chat). A server-side push rule per room, removed again when you
   // leave the chat or the app goes to the background; leftovers (app killed)
   // are cleaned up on the next start.
-  quietRooms(roomIds, cleanupOnly = false) {
-    const KEY = 'inbox.quietRooms'
-    let current = []
-    try { current = JSON.parse(localStorage.getItem(KEY) || '[]') } catch {}
-    const want = cleanupOnly ? [] : roomIds
-    const ruleId = (id) => `inbox-open-${id}`
-    for (const id of current.filter((r) => !want.includes(r))) {
-      this.api('DELETE', `/_matrix/client/v3/pushrules/global/override/${enc(ruleId(id))}`, null, { keepalive: true }).catch(() => {})
-    }
-    for (const id of want.filter((r) => !current.includes(r))) {
-      this.api('PUT', `/_matrix/client/v3/pushrules/global/override/${enc(ruleId(id))}`, {
-        conditions: [{ kind: 'event_match', key: 'room_id', pattern: id }], actions: [],
-      }).catch(() => {})
-    }
-    try { localStorage.setItem(KEY, JSON.stringify(want)) } catch {}
+  // Chats you're reading right now on this device: the service worker shows no
+  // notification for them here. (It used to be a server push rule, which also
+  // silenced the phone while a chat sat open on the Mac.)
+  quietRooms(roomIds) {
+    const key = roomIds.join('|')
+    if (key === this.quietKey && Date.now() - (this.quietAt || 0) < 20_000) return
+    this.quietKey = key
+    this.quietAt = Date.now()
+    idbSet('quietRooms', { rooms: roomIds, at: Date.now() }).catch(() => {})
   }
+
+  // Remove the old "chat is open" push rules, left by any device's older app version.
+  async dropOpenChatRules() {
+    try {
+      const rules = await this.api('GET', '/_matrix/client/v3/pushrules/')
+      for (const r of rules.global?.override || []) {
+        if (r.rule_id.startsWith('inbox-open-')) await this.api('DELETE', `/_matrix/client/v3/pushrules/global/override/${enc(r.rule_id)}`).catch(() => {})
+      }
+    } catch {}
+    try { localStorage.removeItem('inbox.quietRooms') } catch {}
+  }
+
 
   async sendVoice(roomId, blob, durationMs) {
     let type = (blob.type || 'audio/webm').split(';')[0]

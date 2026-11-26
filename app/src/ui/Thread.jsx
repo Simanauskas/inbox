@@ -10,6 +10,7 @@ import { ContactPrompt } from './PhoneBook.jsx'
 import { InviteBanner, PlanBanner } from './Lists.jsx'
 import { EMOJI_GRID, quickReactions, splitEmojis } from '../emoji.js'
 import { PEOPLE_TYPE } from '../matrix.js'
+import { isLooking, onLookingChange } from '../looking.js'
 
 // manual channel picks survive navigating away and back (per person, this session)
 const overrides = new Map()
@@ -61,25 +62,25 @@ export default function Thread({ ctx, item }) {
     if (el && atBottom.current) el.scrollTop = el.scrollHeight
   })
 
-  // read receipts while you're looking at it (bridges pass them on to the apps)
-  useEffect(() => {
-    if (document.visibilityState !== 'visible') return
-    for (const id of item.rooms) if (rooms[id]) client.markRead(id)
-  }, [ctx.version, item.key])
-  useEffect(() => {
-    const on = () => { if (document.visibilityState === 'visible') for (const id of item.rooms) client.markRead(id) }
-    document.addEventListener('visibilitychange', on)
-    return () => document.removeEventListener('visibilitychange', on)
-  }, [item.key])
-
-  // no notifications from this person while their chat is open on screen
+  // Read receipts only while you're actually looking: the window in front AND you've
+  // touched the mouse/keyboard in the last minute. On the Mac the Inbox window stays
+  // "visible" behind other apps and while you're out, and marking things read then
+  // cleared your counts and made you miss messages.
   const roomsKey = item.rooms.join('|')
   useEffect(() => {
-    const apply = () => client.quietRooms(document.visibilityState === 'visible' ? item.rooms : [])
-    apply()
-    document.addEventListener('visibilitychange', apply)
-    return () => { document.removeEventListener('visibilitychange', apply); client.quietRooms([]) }
+    const look = () => {
+      const on = isLooking()
+      // this device shows nothing for the chat you're reading; other devices still notify
+      client.quietRooms(on ? item.rooms : [])
+      if (on) for (const id of item.rooms) if (rooms[id]) client.markRead(id)
+    }
+    look()
+    const off = onLookingChange(look)
+    return () => { off(); client.quietRooms([]) }
   }, [roomsKey])
+  useEffect(() => {
+    if (isLooking()) for (const id of item.rooms) if (rooms[id]) client.markRead(id)
+  }, [ctx.version, item.key])
 
   // refresh "2h ago" labels
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 60000); return () => clearInterval(t) }, [])

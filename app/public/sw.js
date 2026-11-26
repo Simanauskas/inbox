@@ -47,7 +47,21 @@ async function handlePush(p) {
     })
   }
   const n = self.InboxPush.notificationFromPush(p)
+  // You're reading this chat in Inbox on this device right now: nothing to show here.
+  // (Browsers want a notification for every push, so show it silently and close it.)
+  if (p.room_id && await readingHere(p.room_id)) {
+    await self.registration.showNotification(n.title, { ...n.options, silent: true, renotify: false, tag: 'inbox-reading' })
+    for (const x of await self.registration.getNotifications({ tag: 'inbox-reading' })) x.close()
+    return
+  }
   return self.registration.showNotification(n.title, n.options)
+}
+
+async function readingHere(roomId) {
+  const q = await idbGet('quietRooms')
+  if (!q || !q.rooms || !q.rooms.includes(roomId) || Date.now() - q.at > 90_000) return false
+  const cs = await self.clients.matchAll({ type: 'window' })
+  return cs.some((c) => c.focused && c.visibilityState === 'visible')
 }
 
 // How old the event is, using the session the app saved for us; null if unknown.

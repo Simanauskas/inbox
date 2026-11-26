@@ -244,3 +244,17 @@ these images. Details and gotchas: `references/server.md`.
   Leave group = Matrix leave (bridge leaves on the app).
 - Capabilities per bridge in `groupCaps`: WhatsApp all; Messenger/Instagram/Telegram add, remove,
   rename, leave; iMessage view-only. Rights come from the room's power levels (`canDo`).
+
+## Notifications reaching every device (26 Nov 2026)
+- Synapse quirk: a pusher only looks at the oldest 20 notifications after its pointer; if those
+  are all read it skips them and never advances, so that device gets nothing until its app
+  re-registers. The iPhone web-app pusher was stuck from 24 Nov this way. `server/push-watchdog.sh`
+  (cron every 5 min, installed by setup.sh) moves such pointers on and restarts Synapse.
+- Read receipts only when you're really looking (`app/src/looking.js`: window in front + input in
+  the last minute on Mac; on touch devices just in front). The Mac window stays "visible" behind
+  other apps and while he's out, which used to mark everything in the open chat read.
+- No more server push rules for the open chat (`inbox-open-*`, they silenced the phone too): the
+  app writes `quietRooms` to IndexedDB and the service worker shows nothing for that chat on that
+  device only. Old rules are removed on start (`dropOpenChatRules`).
+- The TestFlight app has no push of its own (APNs not built); phone notifications come from the
+  home-screen web app's subscription.

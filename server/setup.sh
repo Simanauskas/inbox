@@ -293,6 +293,8 @@ fi
 
 # the old cron-based contacts sync is replaced by the contacts service
 ( crontab -l 2>/dev/null | grep -v '/contacts.sh' ) | crontab - 2>/dev/null || true
+# keep push notifications reaching every device (see push-watchdog.sh)
+bash "$(dirname "$0")/push-watchdog.sh" --install >/dev/null 2>&1 || true
 
 cat <<EOF
 

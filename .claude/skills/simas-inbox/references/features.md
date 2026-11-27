@@ -91,3 +91,22 @@ directly), biometric-auth (Face ID lock), app-launcher, keyboard, push-notificat
 calendar. Info.plist usage texts: photos, camera, microphone, Face ID, calendars, location.
 `.github/workflows/ios.yml`: archive unsigned → ad-hoc sign with entitlements → export with
 automatic App Store signing (App Store Connect API key secrets) → TestFlight; build number = run number.
+
+## Share sheet (since 27 Nov)
+
+- **Share extension** `app/ios/App/ShareExtension` (target ShareExtension, bundle id
+  `fit.simas.inbox.ShareExtension`, display name "Inbox"): copies shared photos/videos/files into the
+  App Group `group.fit.simas.inbox` (`Shares/` + `pending.json`; links/text in the manifest), notes the
+  chat when he tapped a suggested person (`INSendMessageIntent.conversationIdentifier` = Inbox item
+  key), then opens `inboxshare://share` (responder-chain `openURL:options:completionHandler:`).
+- App: native plugin `InboxSharePlugin` (registered in `MainViewController`, set as root in
+  SceneDelegate): `getPendingShare` / `clearShare` / `donate`. `native.js` `takePendingShare` on
+  launch + resume → known chat ⇒ open it, else `ShareSheet` "Send to…"; items go into that chat's
+  composer (`shareDraft.js`). Sending a message calls `donateConversation` (INSendMessageIntent with
+  name + avatar, at most every 10 min per chat) so iOS suggests people with the Inbox badge.
+- Apple setup (done 27 Nov on the developer account): App Group `group.fit.simas.inbox`, enabled on
+  `fit.simas.inbox`, App ID `fit.simas.inbox.ShareExtension` with the group. The build's API key can
+  sign but can't register identifiers/capabilities ("Authentication failed / No profiles"): new
+  capabilities or extensions need these portal steps first. The workflow ad-hoc signs the .appex with
+  `ShareExtension.entitlements` before export.
+- Project edits were made with Ruby `xcodeproj` (docker `ruby:3.3-slim`), not by hand.

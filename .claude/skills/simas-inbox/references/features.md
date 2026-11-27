@@ -136,7 +136,10 @@ automatic App Store signing (App Store Connect API key secrets) → TestFlight; 
 Service `transcribe` (`server/transcribe/`, profile `transcribe`, TRANSCRIBE=1): faster-whisper
 large-v3-turbo int8 (4 threads, models in data/whisper) + Claude clean-up of the text → room account
 data `fit.simas.inbox.transcripts` {t: {event_id: {text, lang, raw?, pending?, error?}}, requests}.
-New voice notes automatically (~1–2× their length), older ones via the "Transcribe" button
+Progress: the service writes {pending, progress %, eta ms} every ~3 s (Whisper = first 90 %, clean-up
+the rest; RATE learned per run); the app shows a filling line "Transcribing 45% · ~12 s left"
+(`TranscribeProgress`, counts down locally). Voice player (`Audio`): play/pause, a line that fills as
+it plays (tap/drag to seek), elapsed / total time, 1×/1.5×/2×. New voice notes automatically (~1–2× their length), older ones via the "Transcribe" button
 (`client.requestTranscript`, adds to `requests`), "Transcribe again" sets `redo`. App: `Transcript`
 under the player; previews show "🎤 <text>".
 

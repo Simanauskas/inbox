@@ -127,16 +127,37 @@ def whisper():
     return _model
 
 
-def transcribe(ev):
+CLEANUP_SECONDS = 12  # about how long Claude's clean-up takes
+RATE = 1.6  # Whisper seconds per second of audio on sky (first guess; learned as it goes)
+
+
+def transcribe(ev, report=lambda pct, eta: None):
+    """report(percent, seconds left) is called every few seconds while it works."""
+    global RATE
+    dur = ((ev["content"].get("info") or {}).get("duration") or 30000) / 1000
+    report(2, dur * RATE + CLEANUP_SECONDS)
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "voice")
         download(ev["content"]["url"], path)
         t = time.time()
         segs, info = whisper().transcribe(path, beam_size=5, vad_filter=True)
-        raw = " ".join(s.text.strip() for s in segs).strip()
+        dur = info.duration or dur
+        parts, last = [], 0.0
+        for seg in segs:
+            parts.append(seg.text.strip())
+            if time.time() - last > 3:
+                last = time.time()
+                done = max(0.02, min(0.98, seg.end / max(dur, 1)))
+                spent = time.time() - t
+                left = spent * (1 - done) / done + CLEANUP_SECONDS
+                report(int(done * 90), left)  # Whisper is the first 90 %
+        raw = " ".join(parts).strip()
         heard = time.time() - t
+        if dur > 3:
+            RATE = 0.7 * RATE + 0.3 * (heard / dur)
     if not raw:
         return {"text": "", "lang": info.language, "at": int(time.time() * 1000)}
+    report(92, CLEANUP_SECONDS)
     text = cleanup(raw)
     log(f"voice message ({info.language}, {heard:.0f}s + clean-up) transcribed")
     out = {"text": text, "lang": info.language, "at": int(time.time() * 1000)}
@@ -166,10 +187,20 @@ def handle(room, ev, doc=None):
     doc.setdefault("t", {})
     if ev["event_id"] in doc["t"]:
         return doc
-    doc["t"][ev["event_id"]] = {"pending": True, "at": int(time.time() * 1000)}  # the app shows "Transcribing…"
-    save(room, doc)
+    eid = ev["event_id"]
+
+    def report(pct, left):
+        # the app shows a filling line: "Transcribing 45% · ~12 s left"
+        now = int(time.time() * 1000)
+        doc["t"][eid] = {"pending": True, "progress": int(pct), "eta": now + int(max(0, left) * 1000), "at": now}
+        try:
+            save(room, doc)
+        except Exception:  # noqa: BLE001
+            pass
+
+    report(0, 0)
     try:
-        doc["t"][ev["event_id"]] = transcribe(ev)
+        doc["t"][eid] = transcribe(ev, report)
     except Exception as e:  # noqa: BLE001
         log("transcription failed:", str(e)[:150])
         doc["t"][ev["event_id"]] = {"error": "Couldn't transcribe this one", "at": int(time.time() * 1000)}

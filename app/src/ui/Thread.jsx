@@ -472,22 +472,58 @@ const speedListeners = new Set()
 function Audio({ client, c }) {
   const [src, setSrc] = useState(null)
   const [speed, setSpeed] = useState(voiceSpeed)
+  const [playing, setPlaying] = useState(false)
+  const [cur, setCur] = useState(0)
+  const [dur, setDur] = useState(((c.info?.duration || 0) / 1000) || 0)
   const el = useRef(null)
+  const bar = useRef(null)
   useEffect(() => { client.mediaUrl(c.url, { download: true })?.then(setSrc).catch(() => {}) }, [c.url])
   useEffect(() => { const on = (v) => setSpeed(v); speedListeners.add(on); return () => speedListeners.delete(on) }, [])
   useEffect(() => { if (el.current) { el.current.playbackRate = speed; el.current.defaultPlaybackRate = speed } }, [speed, src])
   const voice = c['org.matrix.msc3245.voice'] !== undefined
+  const stop = (e) => e.stopPropagation()
   function nextSpeed(e) {
     e.stopPropagation()
     voiceSpeed = SPEEDS[(SPEEDS.indexOf(voiceSpeed) + 1) % SPEEDS.length]
     try { localStorage.setItem('inbox.voiceSpeed', String(voiceSpeed)) } catch {}
     for (const fn of speedListeners) fn(voiceSpeed)
   }
+  function toggle(e) {
+    e.stopPropagation()
+    const a = el.current
+    if (!a) return
+    if (a.paused) { a.playbackRate = voiceSpeed; a.play().catch(() => {}) } else a.pause()
+  }
+  // tap or drag along the line to jump
+  function seek(e) {
+    e.stopPropagation()
+    const a = el.current
+    const r = bar.current?.getBoundingClientRect()
+    if (!a || !r || !dur) return
+    const x = (e.touches?.[0]?.clientX ?? e.clientX) - r.left
+    a.currentTime = Math.max(0, Math.min(1, x / r.width)) * dur
+    setCur(a.currentTime)
+  }
+  const pct = dur ? Math.min(100, (cur / dur) * 100) : 0
   return (
-    <div className="audio">
-      {voice ? '🎤' : '🎵'}
-      {src ? <audio ref={el} src={src} controls preload="metadata" onClick={(e) => e.stopPropagation()} onPlay={(e) => { e.currentTarget.playbackRate = voiceSpeed }} /> : <span className="spinner small" />}
-      {src && <button className="speed" onClick={nextSpeed} aria-label={`Playback speed ${speed}×`}>{speed}×</button>}
+    <div className="audio voice" onClick={stop} onContextMenu={stop}>
+      <button className="voice-play" onClick={toggle} disabled={!src} aria-label={playing ? 'Pause' : 'Play'}>
+        {!src ? <span className="spinner small" /> : playing ? '❚❚' : '▶'}
+      </button>
+      <div className="voice-main">
+        <div className="voice-track" ref={bar} onClick={seek} onTouchStart={seek} onTouchMove={seek}>
+          <div className="voice-fill" style={{ width: `${pct}%` }} />
+          <div className="voice-knob" style={{ left: `${pct}%` }} />
+        </div>
+        <div className="voice-time">{voice ? '🎤 ' : '🎵 '}{playing || cur > 0 ? `${fmtDur(cur * 1000)} / ${fmtDur(dur * 1000)}` : fmtDur(dur * 1000)}</div>
+      </div>
+      <button className="speed" onClick={nextSpeed} aria-label={`Playback speed ${speed}×`}>{speed}×</button>
+      {src && <audio ref={el} src={src} preload="metadata"
+        onLoadedMetadata={(e) => { if (isFinite(e.currentTarget.duration) && e.currentTarget.duration > 0) setDur(e.currentTarget.duration) }}
+        onTimeUpdate={(e) => setCur(e.currentTarget.currentTime)}
+        onPlay={(e) => { e.currentTarget.playbackRate = voiceSpeed; setPlaying(true) }}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setCur(0) }} />}
     </div>
   )
 }
@@ -1030,7 +1066,7 @@ function Transcript({ client, room, ev }) {
   const t = room.transcripts?.t?.[ev.event_id]
   const ask = (again) => (e) => { e.stopPropagation(); client.requestTranscript(room.id, ev.event_id, again).catch(() => {}) }
   if (!t) return <button className="transcript-btn" onClick={ask(false)}>Transcribe</button>
-  if (t.pending) return <div className="transcript muted"><span className="spinner small" /> Transcribing…</div>
+  if (t.pending) return <TranscribeProgress t={t} />
   if (t.error) return <button className="transcript-btn" onClick={ask(true)}>Couldn't transcribe · Try again</button>
   if (!t.text) return <div className="transcript muted">(no speech)</div>
   const long = t.text.length > 220
@@ -1038,6 +1074,21 @@ function Transcript({ client, room, ev }) {
     <div className="transcript" onClick={(e) => { if (long) { e.stopPropagation(); setOpen(!open) } }}>
       {long && !open ? t.text.slice(0, 200) + '…' : t.text}
       {(open || !long) && <button className="transcript-again" onClick={ask(true)}>Transcribe again</button>}
+    </div>
+  )
+}
+
+// "Transcribing 45% · ~12 s left" with a line that fills; the seconds count down here
+// between sky's updates (every ~3 s).
+function TranscribeProgress({ t }) {
+  const [, tick] = useState(0)
+  useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(i) }, [])
+  const pct = Math.max(1, Math.min(99, t.progress || 0))
+  const left = t.eta ? Math.max(1, Math.round((t.eta - Date.now()) / 1000)) : null
+  return (
+    <div className="transcript-progress">
+      <div className="tp-track"><div className="tp-fill" style={{ width: `${pct}%` }} /></div>
+      <div className="tp-label">Transcribing {pct}%{left ? ` · ~${left} s left` : ''}</div>
     </div>
   )
 }

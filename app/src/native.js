@@ -1,6 +1,6 @@
 // Bits that only exist in the iPhone app (Capacitor). In the browser these are no-ops
 // and the web versions (file inputs, web push) are used instead.
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 
 export const isNative = Capacitor.isNativePlatform()
 
@@ -184,4 +184,49 @@ export function tapToDismissKeyboard() {
   }
   document.addEventListener('touchstart', on, { capture: true, passive: true })
   return () => document.removeEventListener('touchstart', on, { capture: true })
+}
+
+// --- Sharing in from other apps (the Share extension) and share-sheet suggestions ---
+const InboxShare = isNative ? registerPlugin('InboxShare') : null
+
+// What was shared to Inbox, if anything: { conversation (Inbox chat key or null), files, text }.
+// Taken once: the shared copy is removed afterwards.
+export async function takePendingShare() {
+  if (!InboxShare) return null
+  let share
+  try { share = await InboxShare.getPendingShare() } catch { return null }
+  if (!share?.items?.length) return null
+  const files = []
+  const texts = []
+  for (const it of share.items) {
+    if (it.kind === 'text' && it.text) texts.push(it.text)
+    else if (it.path) {
+      try {
+        const blob = await (await fetch(Capacitor.convertFileSrc(it.path))).blob()
+        files.push(new File([blob], it.name || 'file', { type: it.type || blob.type }))
+      } catch {}
+    }
+  }
+  InboxShare.clearShare().catch(() => {})
+  if (!files.length && !texts.length) return null
+  return { conversation: share.conversation || null, files, text: texts.join('\n') }
+}
+
+// Tell iOS you messaged this chat, so it's suggested (with its photo) at the top of the
+// share sheet. image: a small avatar Blob, optional.
+const donated = new Map()
+export async function donateConversation(key, name, image) {
+  if (!InboxShare || !key || !name) return
+  if (Date.now() - (donated.get(key) || 0) < 10 * 60_000) return // iOS needs it once in a while, not per message
+  donated.set(key, Date.now())
+  let b64
+  if (image) {
+    b64 = await new Promise((resolve) => {
+      const r = new FileReader()
+      r.onload = () => resolve(String(r.result).split(',')[1])
+      r.onerror = () => resolve(undefined)
+      r.readAsDataURL(image)
+    })
+  }
+  InboxShare.donate({ key, name, ...(b64 ? { image: b64 } : {}) }).catch(() => {})
 }

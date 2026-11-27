@@ -69,6 +69,10 @@ jobs:
           if [ -d "$APP/Frameworks" ]; then
             for f in "$APP"/Frameworks/*; do codesign --force --sign - "$f"; done
           fi
+          # the Share extension (Inbox in the share sheet) shares an App Group with the app
+          for x in "$APP"/PlugIns/*.appex; do
+            [ -e "$x" ] && codesign --force --sign - --entitlements app/ios/App/ShareExtension/ShareExtension.entitlements "$x"
+          done
           codesign --force --sign - --entitlements app/ios/App/App/App.entitlements "$APP"
           codesign -d --entitlements - "$APP"
 
@@ -99,6 +103,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ipa" && unzip -q -o "$IPA" -d "$RUNNER_TEMP/ipa"
           codesign -d --entitlements - "$RUNNER_TEMP"/ipa/Payload/*.app 2>&1 | tee "$RUNNER_TEMP/ent.txt"
           grep -q aps-environment "$RUNNER_TEMP/ent.txt" || { echo "::error::The signed app has no push entitlement"; exit 1; }
+          grep -q application-groups "$RUNNER_TEMP/ent.txt" || { echo "::error::The signed app has no App Group"; exit 1; }
 
       - name: Remove the key
         if: always()

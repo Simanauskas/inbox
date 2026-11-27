@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { isNative, pickPhotos, openExternal } from '../native.js'
+import { isNative, pickPhotos, openExternal, donateConversation } from '../native.js'
+import { takeSharedDraft, onSharedDraft } from '../shareDraft.js'
 import { callOptions } from '../calls.js'
 import { go, back } from '../router.js'
 import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig, canEdit, canDelete, pollOf, tallyPoll, POLL_START } from '../people.js'
@@ -217,7 +218,7 @@ export default function Thread({ ctx, item }) {
       )}
       {forwarding && <ForwardSheet ctx={ctx} en={forwarding} onClose={() => setForwarding(null)} onDone={(name) => { setForwarding(null); setNotice(`Forwarded to ${name}`) }} />}
       <Composer
-        ctx={ctx} target={target} replyTo={replyTo}
+        ctx={ctx} item={item} target={target} replyTo={replyTo}
         editing={editing} onEdit={(en) => { setEditing(en); setReplyTo(null) }} onCancelEdit={() => setEditing(null)} lastEditable={lastEditable}
         onClearReply={() => setReplyTo(null)}
         onSent={() => { setReplyTo(null); atBottom.current = true }}
@@ -567,7 +568,7 @@ export function suggestionsFor(room, me) {
   return s.replies
 }
 
-function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEditable, onClearReply, onSent }) {
+function Composer({ ctx, item, target, replyTo, editing, onEdit, onCancelEdit, lastEditable, onClearReply, onSent }) {
   const { client, model } = ctx
   const [text, setText] = useState('')
   const [err, setErr] = useState(null)
@@ -613,6 +614,26 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
     try { await client.sendVoice(target, blob, ms) } catch (e) { setErr(`Couldn't send the voice message: ${e.message}`) }
   })
   const canRecord = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
+
+  // something shared in from another app (iPhone share sheet) for this chat: put it in the box
+  useEffect(() => {
+    const take = () => {
+      const d = takeSharedDraft(item.key)
+      if (!d) return
+      if (d.files?.length) addFiles(d.files)
+      if (d.text) setText((t) => (t ? `${t}\n${d.text}` : d.text))
+    }
+    take()
+    return onSharedDraft((key) => { if (key === item.key) take() })
+  }, [item.key])
+
+  // tell iOS you message this chat (share-sheet suggestions), with their photo
+  function donate() {
+    if (!isNative) return
+    const p = item.avatarUrl ? client.mediaUrl(item.avatarUrl, { width: 96 }) : null
+    Promise.resolve(p).then((u) => (u ? fetch(u).then((r) => r.blob()) : null)).catch(() => null)
+      .then((blob) => donateConversation(item.key, item.name, blob))
+  }
 
   // editing: the message goes into the box; Enter saves, Esc (or ✕) cancels
   const editKey = editing?.ev.event_id
@@ -660,6 +681,7 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
     setMentions([])
     if (replyTo && replyTo.roomId === target) content['m.relates_to'] = { 'm.in_reply_to': { event_id: replyTo.ev.event_id } }
     onSent()
+    donate()
     try { await client.send(target, content) } catch (e) { setErr(`Couldn't send: ${e.message}`) }
   }
 
@@ -713,6 +735,7 @@ function Composer({ ctx, target, replyTo, editing, onEdit, onCancelEdit, lastEdi
     setText('')
     setErr(null)
     onSent()
+    donate()
     for (let i = 0; i < items.length; i++) {
       const { file, url } = items[i]
       // the caption goes with the first photo, as in WhatsApp

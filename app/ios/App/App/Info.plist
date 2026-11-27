@@ -2,18 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Inbox shares your location only when you send it in a chat.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
-  <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Inbox</string>
+	<string>Inbox</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,29 +20,73 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>fit.simas.inbox.share</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>inboxshare</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+		<string>fb-messenger</string>
+		<string>facetime</string>
+		<string>facetime-audio</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>To add plans you agree in chats to your calendar.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>To add plans you agree in chats to your calendar.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>To add plans you agree in chats to your calendar.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>To take photos and videos to send.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>To lock Inbox with Face ID.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Inbox shares your location only when you send it in a chat.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>To record voice messages and videos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>To send photos and videos from your library.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-    <false/>
-    <key>UISceneConfigurations</key>
-    <dict>
-      <key>UIWindowSceneSessionRoleApplication</key>
-      <array>
-        <dict>
-            <key>UISceneConfigurationName</key>
-            <string>Default Configuration</string>
-            <key>UISceneDelegateClassName</key>
-            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-            <key>UISceneStoryboardFile</key>
-            <string>Main</string>
-        </dict>
-      </array>
-    </dict>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -72,28 +110,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>To send photos and videos from your library.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>To take photos and videos to send.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>To record voice messages and videos.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>To lock Inbox with Face ID.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>whatsapp</string>
-		<string>fb-messenger</string>
-		<string>facetime</string>
-		<string>facetime-audio</string>
-	</array>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>To add plans you agree in chats to your calendar.</string>
-	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>To add plans you agree in chats to your calendar.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>To add plans you agree in chats to your calendar.</string>
 </dict>
 </plist>

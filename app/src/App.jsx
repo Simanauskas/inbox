@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react'
 import { Client, PEOPLE_TYPE } from './matrix.js'
-import { lockEnabled, unlock, onResume, isNative, startNativePush, clearNativeNotifications, tapToDismissKeyboard } from './native.js'
+import { lockEnabled, unlock, onResume, isNative, startNativePush, clearNativeNotifications, tapToDismissKeyboard, takePendingShare } from './native.js'
+import { setSharedDraft } from './shareDraft.js'
+import ShareSheet from './ui/ShareSheet.jsx'
 import { buildModel, suggestions, previewText, autoMerges, applyAutoMerges } from './people.js'
 import { networkInfo } from './networks.js'
 import Login from './ui/Login.jsx'
@@ -223,6 +225,31 @@ function Main({ session, onLogout }) {
   // reactions: notify only for reactions to your messages (unless a chat asks for all)
   useEffect(() => { if (client.synced) client.ensureReactionRule() }, [client, client.synced])
 
+  // Shared in from another app (iPhone share sheet): straight to the chosen person's chat,
+  // or ask who to send it to. The chat opens with it waiting in the message box.
+  const [share, setShare] = useState(null)
+  const findRef = useRef(findItem)
+  findRef.current = findItem
+  const deliverShare = useCallback((item, s) => { setSharedDraft(item.key, { files: s.files, text: s.text }); setShare(null); go('t', item.key) }, [])
+  useEffect(() => {
+    if (!isNative || !client.synced) return
+    let busy = false
+    const check = async () => {
+      if (busy) return
+      busy = true
+      const s = await takePendingShare().catch(() => null)
+      busy = false
+      if (!s) return
+      const target = s.conversation && findRef.current(s.conversation)
+      if (target) deliverShare(target, s)
+      else setShare(s)
+    }
+    check()
+    let off = () => {}
+    onResume((active) => { if (active) check() }).then((fn) => { off = fn })
+    return () => off()
+  }, [client.synced])
+
   const ctx = { client, model, sugg, findItem, wide, route, version, onLogout }
   let page = null
   const item = route.arg ? findItem(route.arg) : null
@@ -239,10 +266,11 @@ function Main({ session, onLogout }) {
   const updateBar = updateReady ? <button className="update-bar" onClick={() => location.reload()}>A new version of Inbox is ready. <b>Update</b></button>
     : trouble === 'expired' && route.view !== 'settings' ? <button className="update-bar" onClick={() => go('settings')}>Reply suggestions: the Claude sign-in needs renewing. <b>How</b></button>
     : null
+  const shareSheet = share && <ShareSheet ctx={ctx} share={share} onPick={(i) => deliverShare(i, share)} onClose={() => setShare(null)} />
   if (wide) {
     return (
       <div className="app split">
-        {updateBar}
+        {updateBar}{shareSheet}
         <aside className="list-pane"><Inbox ctx={ctx} selected={item?.key} /></aside>
         <main className="detail-pane">{page || <div className="empty-pane"><p>Pick a conversation</p></div>}</main>
       </div>
@@ -252,7 +280,7 @@ function Main({ session, onLogout }) {
   // back shows the inbox following your finger (not a black screen) and keeps its scroll.
   return (
     <div className="app">
-      {updateBar}
+      {updateBar}{shareSheet}
       <div className="base-layer" inert={page ? '' : undefined} aria-hidden={!!page}><Inbox ctx={ctx} /></div>
       {page && <div className="page-layer">{page}</div>}
     </div>

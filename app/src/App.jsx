@@ -9,6 +9,7 @@ import Login from './ui/Login.jsx'
 import Inbox from './ui/Inbox.jsx'
 import Thread from './ui/Thread.jsx'
 import Person from './ui/Person.jsx'
+import MediaPage from './ui/Media.jsx'
 import Merge from './ui/Merge.jsx'
 import Settings, { claudeTrouble } from './ui/Settings.jsx'
 import Search from './ui/Search.jsx'
@@ -268,6 +269,7 @@ function Main({ session, onLogout }) {
     const it = r.arg ? findItem(r.arg) : null
     if (r.view === 't' && it) return <Thread key={it.key} ctx={c} item={it} />
     if (r.view === 'p' && it) return <Person key={it.key} ctx={c} item={it} />
+    if (r.view === 'm' && it) return <MediaPage key={it.key} ctx={c} item={it} />
     if (r.view === 'merge') return <Merge ctx={c} />
     if (r.view === 'settings') return <Settings ctx={c} />
     if (r.view === 'search') return <Search ctx={c} />

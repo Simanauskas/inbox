@@ -11,7 +11,8 @@ const days = (ms) => {
 
 // What the app allows for one chat (from the bridge's room_features): disappearing
 // messages, block, delete the chat, group photo. Shown on the contact and group pages.
-export default function ChatSettings({ client, model, roomId, kind, name }) {
+// part: 'settings' (timer, photo) | 'danger' (block, delete) | undefined (both)
+export default function ChatSettings({ client, model, roomId, kind, name, part }) {
   const room = client.rooms[roomId]
   useEffect(() => { client.loadFeatures(roomId) }, [roomId])
   const [busy, setBusy] = useState(false)
@@ -25,11 +26,14 @@ export default function ChatSettings({ client, model, roomId, kind, name }) {
   const blocked = !!room.bridge?.channel?.['com.beeper.user_blocked']
   const canPhoto = kind === 'group' && f.state?.['m.room.avatar']?.level > 0 && canDo(room, client.userId, 'm.room.avatar')
   const run = async (fn) => { setBusy(true); setErr(null); try { await fn() } catch (e) { setErr(e.message) } setBusy(false) }
-  if (!canTimer && !f.block_user && !f.delete_chat && !canPhoto) return null
+  const showS = part !== 'danger'
+  const showD = part !== 'settings'
+  const any = (showS && (canTimer || canPhoto)) || (showD && (f.block_user || f.delete_chat))
+  if (!any) return null
 
   return (
     <div className="card chat-settings">
-      {canTimer && (
+      {showS && canTimer && (
         <label className="setting-row">
           <Icon name="timer" size={18} />
           <span className="grow">Disappearing messages</span>
@@ -39,25 +43,25 @@ export default function ChatSettings({ client, model, roomId, kind, name }) {
           </select>
         </label>
       )}
-      {canPhoto && (
+      {showS && canPhoto && (
         <button className="setting-row" disabled={busy} onClick={() => photo.current?.click()}>
           <Icon name="camera" size={18} /><span className="grow">Change group photo</span>
           <input ref={photo} type="file" accept="image/*" hidden onChange={(e) => { const file = e.target.files[0]; e.target.value = ''; if (file) run(() => client.setRoomAvatar(roomId, file)) }} />
         </button>
       )}
-      {f.block_user && kind !== 'group' && (
+      {showD && f.block_user && kind !== 'group' && (
         <button className="setting-row danger" disabled={busy}
           onClick={() => (blocked || confirm(`Block ${name} on ${app}? They won't be able to message or call you there.`)) && run(() => client.blockUser(roomId, !blocked))}>
           <Icon name="block" size={18} /><span className="grow">{blocked ? `Unblock ${name} on ${app}` : `Block ${name} on ${app}`}</span>
         </button>
       )}
-      {f.delete_chat && (
+      {showD && f.delete_chat && (
         <button className="setting-row danger" disabled={busy}
           onClick={() => confirm(`Delete this chat on ${app}? Its messages are removed from ${app} on your phone too.`) && run(async () => { await client.deleteChat(roomId); go('inbox') })}>
           <Icon name="trash" size={18} /><span className="grow">Delete chat on {app}</span>
         </button>
       )}
-      {f.delete_chat_for_everyone && (
+      {showD && f.delete_chat_for_everyone && (
         <button className="setting-row danger" disabled={busy}
           onClick={() => confirm(`Delete this chat for both of you on ${app}? This can't be undone.`) && run(async () => { await client.deleteChat(roomId, { forEveryone: true }); go('inbox') })}>
           <Icon name="trash" size={18} /><span className="grow">Delete for both of you</span>

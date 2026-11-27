@@ -122,3 +122,25 @@ automatic App Store signing (App Store Connect API key secrets) → TestFlight; 
   `.page-layer.under` (inert, `ctx.background` → Thread doesn't mark read / pause notifications /
   send WhatsApp viewing) under `.page-layer.top`, both keyed by route hash, so swipe-back from a
   contact page reveals the chat (and keeps its scroll).
+
+## Contact page (WhatsApp-style, 27 Nov) and media
+- `ui/Person.jsx` Contact: hero (avatar 112, name, formatted number `formatPhone`, app badges), round
+  actions Chat · Call (callOptions sheet) · Mute; cards: Media, links and docs (count from
+  `loadMedia`), Notifications + Pin chat, chat settings part "settings", About, Contact details
+  (collapsed: iCloud card + PhoneBookCard), Apps (default/unlink/add chat), groups in common (by ghost
+  id or same number), Lists, then ChatSettings part "danger" (block/delete). Edit (top right) renames.
+- `ui/Media.jsx` (route `#/m/<key>`): Media grid / Links / Docs from all the person's rooms
+  (`/messages` pages), photos open in the shared `Viewer`.
+
+## Voice messages as text (27 Nov)
+Service `transcribe` (`server/transcribe/`, profile `transcribe`, TRANSCRIBE=1): faster-whisper
+large-v3-turbo int8 (4 threads, models in data/whisper) + Claude clean-up of the text → room account
+data `fit.simas.inbox.transcripts` {t: {event_id: {text, lang, raw?, pending?, error?}}, requests}.
+New voice notes automatically (~1–2× their length), older ones via the "Transcribe" button
+(`client.requestTranscript`, adds to `requests`), "Transcribe again" sets `redo`. App: `Transcript`
+under the player; previews show "🎤 <text>".
+
+## WhatsApp hidden IDs → numbers (27 Nov)
+`server/lidmap.sh` (cron 30 min, setup.sh) publishes the bridge's `whatsmeow_lid_map` as account data
+`fit.simas.inbox.lidmap` {map: {lid: number}}; `buildModel` → `setLidPhones` → `phoneFromUser` gives
+`@whatsapp_lid-…` ghosts their real number (contact matching, merging, calls, groups in common).

@@ -371,7 +371,7 @@ function Img({ client, c, sticker }) {
 
 // Full-screen photo: pinch or double-tap to zoom, drag to look around, swipe down or ✕ to
 // close. Long-press the photo on the iPhone to save it; "Save" downloads it elsewhere.
-function Viewer({ client, c, thumb, onClose }) {
+export function Viewer({ client, c, thumb, onClose }) {
   const [full, setFull] = useState(() => client.mediaCached(c.url, { download: true }))
   const [z, setZ] = useState({ s: 1, x: 0, y: 0 })
   const [drag, setDrag] = useState(0) // swipe-down distance when not zoomed

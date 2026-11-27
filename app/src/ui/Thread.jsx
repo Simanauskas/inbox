@@ -25,7 +25,9 @@ export default function Thread({ ctx, item }) {
   const multi = item.rooms.length > 1
   const isGroup = item.kind === 'group'
   const { entries, hasMore } = mergedTimeline(item, rooms)
-  useWhatsAppViewing(client, model, item)
+  // drawn underneath another page (phone back stack): don't act as the open chat
+  const live = !ctx.background
+  useWhatsAppViewing(client, model, item, live)
   const scroller = useRef(null)
   const atBottom = useRef(true)
   const [loading, setLoading] = useState(false)
@@ -86,7 +88,7 @@ export default function Thread({ ctx, item }) {
   const roomsKey = item.rooms.join('|')
   useEffect(() => {
     const look = () => {
-      const on = isLooking()
+      const on = live && isLooking()
       // this device shows nothing for the chat you're reading; other devices still notify
       client.quietRooms(on ? item.rooms : [])
       if (on) for (const id of item.rooms) if (rooms[id]) client.markRead(id)
@@ -94,9 +96,9 @@ export default function Thread({ ctx, item }) {
     look()
     const off = onLookingChange(look)
     return () => { off(); client.quietRooms([]) }
-  }, [roomsKey])
+  }, [roomsKey, live])
   useEffect(() => {
-    if (isLooking()) for (const id of item.rooms) if (rooms[id]) client.markRead(id)
+    if (live && isLooking()) for (const id of item.rooms) if (rooms[id]) client.markRead(id)
   }, [ctx.version, item.key])
 
   useEffect(() => { for (const id of item.rooms) client.loadFeatures(id) }, [roomsKey])
@@ -861,10 +863,10 @@ function EmojiSheet({ onPick, onClose, allowed }) {
 // While this chat is open and Inbox is in front, tell the WhatsApp bridge every 30 s
 // (it then shows you online on WhatsApp, like WhatsApp Web, and typing comes through);
 // "closed" when you leave or switch away. The bridge goes offline by itself after 75 s.
-function useWhatsAppViewing(client, model, item) {
+function useWhatsAppViewing(client, model, item, live = true) {
   const wa = item.rooms.find((id) => model.info[id]?.network === 'whatsapp')
   useEffect(() => {
-    if (!wa) return
+    if (!wa || !live) return
     let on = false
     const tick = () => {
       const visible = document.visibilityState === 'visible' && document.hasFocus()
@@ -883,7 +885,7 @@ function useWhatsAppViewing(client, model, item) {
       window.removeEventListener('blur', now)
       if (on) client.viewing(wa, false)
     }
-  }, [client, wa])
+  }, [client, wa, live])
 }
 
 // Calls happen in the app that can make them (no bridge carries calls): WhatsApp,

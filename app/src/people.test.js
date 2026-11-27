@@ -215,7 +215,7 @@ test('phone book: names, matching and merging', async () => {
   ] })
   assert.equal(contactFor(idx2, { names: ['Jonas Kazlauskas'] })?.n, 'Kazlauskas Jonas🏦', 'word order and emoji ignored')
   assert.equal(contactFor(idx2, { names: ['Azuolas Mantas Petraitis'] })?.n, 'Petraitis Ąžuolas', 'middle name on the app only')
-  assert.equal(contactFor(idx2, { names: ['Rimas Vaitkus'] }), null, 'two cards with that name: no guess')
+  assert.ok(contactFor(idx2, { names: ['Rimas Vaitkus'] }), 'the same name saved twice is one person')
   assert.equal(contactFor(idx2, { names: ['Rimas'] }), null)
   assert.match(vcard({ name: 'Jonas Bernotas', phones: ['37065666144'] }), /FN:Jonas Bernotas\r\nN:Bernotas;Jonas;;;\r\nTEL;TYPE=CELL:\+37065666144/)
 })

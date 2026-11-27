@@ -102,18 +102,31 @@ function FaceIdLock({ children }) {
   )
 }
 
+// The current route, plus the one before it (so the phone can keep the page you came from
+// drawn underneath, e.g. the chat under its contact page, for swipe-back).
 function useHashRoute() {
   const parse = () => {
     const h = decodeURIComponent(location.hash.replace(/^#\/?/, ''))
     const [view, ...rest] = h.split('/')
-    return { view: view || 'inbox', arg: rest.join('/') || null }
+    return { view: view || 'inbox', arg: rest.join('/') || null, hash: location.hash }
   }
-  const [route, setRoute] = useState(parse)
+  const stack = useRef([parse()])
+  const [route, setRoute] = useState(() => stack.current[0])
   useEffect(() => {
-    const on = () => setRoute(parse())
+    const on = () => {
+      const r = parse()
+      const st = stack.current
+      if (r.view === 'inbox') stack.current = [r]
+      else if (st.length > 1 && st[st.length - 2].hash === r.hash) st.pop()
+      else if (st[st.length - 1]?.hash !== r.hash) st.push(r)
+      if (stack.current.length > 6) stack.current.splice(0, stack.current.length - 6)
+      setRoute(r)
+    }
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
+  const st = stack.current
+  route.prev = st.length > 1 && st[st.length - 1]?.hash === route.hash ? st[st.length - 2] : null
   return route
 }
 
@@ -251,16 +264,22 @@ function Main({ session, onLogout }) {
   }, [client.synced])
 
   const ctx = { client, model, sugg, findItem, wide, route, version, onLogout }
-  let page = null
+  const pageFor = (r, c = ctx) => {
+    const it = r.arg ? findItem(r.arg) : null
+    if (r.view === 't' && it) return <Thread key={it.key} ctx={c} item={it} />
+    if (r.view === 'p' && it) return <Person key={it.key} ctx={c} item={it} />
+    if (r.view === 'merge') return <Merge ctx={c} />
+    if (r.view === 'settings') return <Settings ctx={c} />
+    if (r.view === 'search') return <Search ctx={c} />
+    if (r.view === 'lists') return <ListsPage ctx={c} />
+    if (r.view === 'list' && r.arg) return <ListPage key={r.arg} ctx={c} id={r.arg} />
+    if ((r.view === 't' || r.view === 'p') && !client.synced) return <div className="empty-pane"><div className="spinner" /></div>
+    return null
+  }
   const item = route.arg ? findItem(route.arg) : null
-  if (route.view === 't' && item) page = <Thread key={item.key} ctx={ctx} item={item} />
-  else if (route.view === 'p' && item) page = <Person key={item.key} ctx={ctx} item={item} />
-  else if (route.view === 'merge') page = <Merge ctx={ctx} />
-  else if (route.view === 'settings') page = <Settings ctx={ctx} />
-  else if (route.view === 'search') page = <Search ctx={ctx} />
-  else if (route.view === 'lists') page = <ListsPage ctx={ctx} />
-  else if (route.view === 'list' && route.arg) page = <ListPage key={route.arg} ctx={ctx} id={route.arg} />
-  else if ((route.view === 't' || route.view === 'p') && !client.synced) page = <div className="empty-pane"><div className="spinner" /></div>
+  const page = pageFor(route)
+  // the page you came from, drawn under this one on the phone (not the inbox: that's always there)
+  const prevPage = !wide && page && route.prev && route.prev.view !== 'inbox' ? pageFor(route.prev, { ...ctx, background: true }) : null
 
   const trouble = claudeTrouble(client)
   const updateBar = updateReady ? <button className="update-bar" onClick={() => location.reload()}>A new version of Inbox is ready. <b>Update</b></button>
@@ -282,7 +301,9 @@ function Main({ session, onLogout }) {
     <div className="app">
       {updateBar}{shareSheet}
       <div className="base-layer" inert={page ? '' : undefined} aria-hidden={!!page}><Inbox ctx={ctx} /></div>
-      {page && <div className="page-layer">{page}</div>}
+      {/* keyed by route, so going back keeps the page underneath as it was (scroll and all) */}
+      {prevPage && <div key={route.prev.hash} className="page-layer under" inert="" aria-hidden="true">{prevPage}</div>}
+      {page && <div key={route.hash} className="page-layer top">{page}</div>}
     </div>
   )
 }
@@ -306,7 +327,7 @@ function useEdgeSwipeBack(enabled) {
       const t = e.touches[0]
       if (e.touches.length !== 1 || t.clientX > 24) return
       start = { x: t.clientX, y: t.clientY, t: Date.now(), dragging: false }
-      page = document.querySelector('.page-layer')
+      page = document.querySelector('.page-layer.top')
       if (!page) { start = null; return }
       document.body.classList.add('swiping')
       // only now listen to finger moves in a way that can stop scrolling; a permanent

@@ -27,19 +27,24 @@ export function indexContacts(data) {
   const list = (data?.contacts || []).filter((c) => c.n)
   const byTail = new Map()
   const byEmail = new Map()
-  const nameCount = new Map()
+  const byKey = new Map() // full name -> cards with it
   for (const c of list) {
     for (const p of c.p || []) { const n = normalizePhone(p); if (n && n.length >= 8) byTail.set(tail(n), c) }
     for (const e of c.e || []) byEmail.set(e.toLowerCase(), c)
     const k = nameKey(c.n)
-    nameCount.set(k, (nameCount.get(k) || 0) + 1)
+    if (!byKey.has(k)) byKey.set(k, [])
+    byKey.get(k).push(c)
   }
-  // a name only identifies someone if it's a full name and nobody else has it
+  // A full name identifies someone. Several cards with the same full name are taken to be the
+  // same person saved twice (it happens with iCloud): the fullest card stands for them.
+  const fullness = (c) => (c.p || []).length * 2 + (c.e || []).length + Object.keys(c.d || {}).length
   const byName = new Map()
   const fullNames = []
-  for (const c of list) {
-    const k = nameKey(c.n)
-    if (k.includes(' ') && nameCount.get(k) === 1) { byName.set(k, c); fullNames.push([new Set(k.split(' ')), c]) }
+  for (const [k, cards] of byKey) {
+    if (!k.includes(' ')) continue
+    const best = cards.reduce((a, b) => (fullness(b) > fullness(a) ? b : a))
+    byName.set(k, best)
+    fullNames.push([new Set(k.split(' ')), best])
   }
   return { list, byTail, byEmail, byName, fullNames, size: list.length }
 }

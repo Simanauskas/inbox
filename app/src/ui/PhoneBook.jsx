@@ -100,6 +100,7 @@ export function ConfirmCard({ ctx, item, suggestion, onClose }) {
       setRid(await requestChange(client, suggestion.kind === 'add'
         ? { kind: 'create', name: name.trim(), phones, emails }
         : { kind: 'update', href: suggestion.href, phones, emails }))
+      onClose() // sky saves it within ~20 s; the contact page shows how it went
     } catch (e) { setErr(e.message) }
   }
 
@@ -169,10 +170,23 @@ export function PhoneBookCard({ ctx, item }) {
           <button className="wide-btn" onClick={() => setOpen(s)}><Icon name="people" size={18} /> Update contact card</button>
         </>
       )}
+      <SaveStatus client={client} />
       <p className="hint">{writable(client) ? 'You confirm every change before it’s saved to iCloud.' : 'Your iPhone asks before saving anything.'}</p>
       {open && <ConfirmCard ctx={ctx} item={item} suggestion={open} onClose={() => setOpen(null)} />}
     </div>
   )
+}
+
+// Changes waiting for sky to save to iCloud, and the latest one that iCloud refused.
+function SaveStatus({ client }) {
+  const results = client.accountData[RESULTS_TYPE]?.results || {}
+  const reqs = client.accountData[REQUESTS_TYPE]?.requests || []
+  const pending = reqs.filter((r) => !results[r.rid] && Date.now() - (r.at || 0) < 10 * 60_000)
+  const failed = reqs.map((r) => results[r.rid]).filter((x) => x && !x.ok).slice(-1)[0]
+  const recent = reqs.slice(-1)[0]
+  if (pending.length) return <p className="muted small"><span className="spinner small" /> Saving to iCloud…</p>
+  if (failed && recent && results[recent.rid] === failed) return <p className="error small">iCloud didn’t accept the last change: {failed.message}</p>
+  return null
 }
 
 // A one-line nudge at the top of a chat with someone you talk to but haven't saved.
@@ -183,6 +197,9 @@ export function ContactPrompt({ ctx, item }) {
   const s = cardSuggestion(model, item)
   if (open) return <ConfirmCard ctx={ctx} item={item} suggestion={open} onClose={() => setOpen(null)} />
   if (!s || s.kind !== 'add' || (cfg.contactPromptsDismissed || []).includes(item.key) || !talksWith(client, item)) return null
+  // already being saved (sky picks it up within ~20 s)
+  const results = client.accountData[RESULTS_TYPE]?.results || {}
+  if ((client.accountData[REQUESTS_TYPE]?.requests || []).some((r) => r.kind === 'create' && Date.now() - (r.at || 0) < 10 * 60_000 && (!results[r.rid] || results[r.rid].ok))) return null
   const dismiss = () => client.setAccountData(PEOPLE_TYPE, { ...cfg, contactPromptsDismissed: [...(cfg.contactPromptsDismissed || []), item.key] })
   return (
     <div className="contact-prompt">

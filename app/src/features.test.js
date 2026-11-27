@@ -54,3 +54,10 @@ test('unnamed groups are titled with their members', async () => {
   const room = { members: { '@me:x': { displayname: 'Me', membership: 'join' }, '@whatsapp_1:x': { displayname: 'Jonas Kazlauskas', membership: 'join' }, '@whatsapp_37061234567:x': { displayname: '', membership: 'join' }, '@whatsappbot:x': { displayname: 'bot', membership: 'join' } }, heroes: [], bridge: { bridgebot: '@whatsappbot:x' } }
   assert.equal(groupTitle(room, '@me:x'), 'Jonas, +37061234567')
 })
+
+test('contacts: the same full name saved twice still matches (the fuller card)', async () => {
+  const { indexContacts, contactMatch } = await import('./contacts.js')
+  const idx = indexContacts({ contacts: [{ id: 'a', n: 'Jonas Jonaitis' }, { id: 'b', n: 'Jonaitis Jonas', p: ['+37061234567'] }, { id: 'c', n: 'Ona' }] })
+  assert.equal(contactMatch(idx, { names: ['Jonas Jonaitis'] })?.contact.id, 'b')
+  assert.equal(contactMatch(idx, { names: ['Ona'] }), null)
+})

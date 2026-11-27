@@ -566,3 +566,13 @@ body.swiping .base-layer { filter: brightness(0.85); }
 .chip-n.unread { color: #fff; background: var(--accent); border-radius: 99px; padding: 0 6px; }
 .share-sheet { max-height: 80vh; }
 .share-sheet .pick-list { max-height: 55vh; overflow-y: auto; list-style: none; padding: 0; margin: 6px 0; }
+
+/* touch screens: iOS keeps :hover on whatever the finger touched last (rows stayed grey after
+   scrolling), so hover looks only apply with a real mouse / trackpad */
+@media (hover: none) {
+  .row:hover, .icon-btn:hover, .actions button:hover, .channel:hover, .menu button:hover, .empty-toggle:hover { background: none; }
+  .menu button.on { background: var(--surface-2); }
+}
+* { -webkit-tap-highlight-color: transparent; }
+.page-layer.under { z-index: 19; }
+.page-layer.top { z-index: 20; }

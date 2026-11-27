@@ -110,3 +110,15 @@ automatic App Store signing (App Store Connect API key secrets) → TestFlight; 
   capabilities or extensions need these portal steps first. The workflow ad-hoc signs the .appex with
   `ShareExtension.entitlements` before export.
 - Project edits were made with Ruby `xcodeproj` (docker `ruby:3.3-slim`), not by hand.
+
+## 27 Nov fixes
+- Contacts: several cards with the same full name = one person (fullest card used); before, duplicates
+  blocked the name match and the "add to contacts" prompt kept coming.
+- ConfirmCard closes as soon as the request is queued (sky's contacts service polls every 20 s); the
+  contact page shows "Saving to iCloud…" / the last refusal (`SaveStatus`); the chat prompt hides
+  while a create is pending.
+- Touch: hover styles off under `@media (hover: none)` (rows stayed grey after scrolling).
+- Phone back stack: `useHashRoute` keeps a small stack; the previous page renders in
+  `.page-layer.under` (inert, `ctx.background` → Thread doesn't mark read / pause notifications /
+  send WhatsApp viewing) under `.page-layer.top`, both keyed by route hash, so swipe-back from a
+  contact page reveals the chat (and keeps its scroll).

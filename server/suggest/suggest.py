@@ -63,7 +63,7 @@ def ollama(path, body, timeout=300):
 def embed(texts):
     if not texts:
         return []
-    out = ollama("/api/embed", {"model": EMBED, "input": texts, "keep_alive": "30m"})["embeddings"]
+    out = ollama("/api/embed", {"model": EMBED, "input": texts, "keep_alive": "5m"})["embeddings"]
     v = np.asarray(out, dtype=np.float32)
     v /= np.linalg.norm(v, axis=1, keepdims=True) + 1e-9
     return list(v)
@@ -503,7 +503,7 @@ def suggest(mem, room, ev):
     t = time.time()
 
     def ask(sys_prompt):
-        r = ollama("/api/chat", {"model": MODEL, "stream": False, "format": "json", "keep_alive": "30m",
+        r = ollama("/api/chat", {"model": MODEL, "stream": False, "format": "json", "keep_alive": "1m",
                                  "options": {"temperature": 0.6, "num_predict": 120, "num_ctx": 2048},
                                  "messages": [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user}]})
         try:
@@ -575,12 +575,18 @@ def detect_plan(c, room, convo, name):
         f"and \"{name}\" (e.g. {'\"Lunch with Peter\", \"Tennis with Jonas\"' if english else '\"Tenisas su Jonu\", \"Pietus su Petru\"'}), \"date\": \"YYYY-MM-DD\", \"time\": \"HH:MM\", "
         "\"minutes\": expected length (tennis 90, lunch/coffee 60, call 30), \"place\": place if mentioned else \"\"}}."
     )
-    r = ollama("/api/chat", {"model": MODEL, "stream": False, "format": "json", "keep_alive": "30m",
-                             "options": {"temperature": 0, "num_predict": 120, "num_ctx": 2048},
-                             "messages": [{"role": "system", "content": system}, {"role": "user", "content": "\n".join(lines)}]})
+    # Claude (his subscription) reads it; the small local model only if Claude isn't set up
     try:
-        d = json.loads(r["message"]["content"])
-    except Exception:
+        if use_claude():
+            d = claude(system + " Output only the JSON.", "\n".join(lines), timeout=60)
+            claude_status(DBC, True)
+        else:
+            r = ollama("/api/chat", {"model": MODEL, "stream": False, "format": "json", "keep_alive": "1m",
+                                     "options": {"temperature": 0, "num_predict": 120, "num_ctx": 2048},
+                                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": "\n".join(lines)}]})
+            d = json.loads(r["message"]["content"])
+    except Exception as e:
+        log("plan check failed:", str(e)[:120])
         return None
     if d.get("agreed") is not True:
         return None

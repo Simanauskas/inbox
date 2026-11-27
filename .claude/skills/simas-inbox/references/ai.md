@@ -48,8 +48,19 @@ Runs as @s through the double-puppet as_token, syncs DM rooms only. State in `da
 ## Agreed plans → calendar
 
 - `detect_plan`: when a recent message mentions a time/day (`TIMEISH`) and someone confirmed
-  (`AGREED`), gemma3:4b extracts {agreed, title (chat's language), date, time, minutes, place}
+  (`AGREED`), **Claude** (since 27 Nov; gemma3:4b only if Claude isn't set up) extracts {agreed, title (chat's language), date, time, minutes, place}
   (relative days from today in Vilnius, start between now−1 h and +60 d) → room account data
   `fit.simas.inbox.plan`, offered once per room+start.
 - App `PlanBanner`: "Add to calendar" → Apple Calendar new-event sheet with "Simanauskas | Personal"
   preselected (`@ebarooni/capacitor-calendar`; .ics on the web) / ✕.
+
+## Memory on sky (27 Nov)
+Local models unload quickly now (`keep_alive` 1 m for gemma, 5 m embeddings, `OLLAMA_KEEP_ALIVE=5m`),
+so ~7 GB is free normally. That room is meant for Whisper (voice transcription).
+
+## Voice transcription test (27 Nov)
+faster-whisper on 6 real voice notes (Lithuanian): **large-v3-turbo int8** ≈ real-time on sky's CPU
+(25 s note ≈ 25 s), language detected right, gist readable but many misheard words; **large-v3** a bit
+better, ~2× slower. **Turbo + Claude clean-up** (text only, "fix clearly misheard words, don't add or
+reorder") reads almost like the real message → the plan if he wants it built. Test image: python:3.12-slim +
+faster-whisper 1.1.1 + requests + av 13.1.0 (av 16 breaks faster-whisper); models in data/whisper.

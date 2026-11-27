@@ -45,6 +45,9 @@ export function isBotUser(uid) {
   return /bot$/.test(local) && !local.includes('_')
 }
 
+let LID_PHONES = {}
+export function setLidPhones(map) { LID_PHONES = map && typeof map === 'object' ? map : {} }
+
 // A phone number hidden in a ghost user id, e.g. @whatsapp_37061234567:server
 export function phoneFromUser(uid) {
   // undo Matrix localpart escaping (=2b is "+", =40 is "@")
@@ -52,9 +55,10 @@ export function phoneFromUser(uid) {
   const net = guessFromUser(uid)
   if (local.includes('@')) return null
   if (net !== 'whatsapp' && net !== 'imessage' && net !== 'signal') return null
-  // WhatsApp "linked IDs" (whatsapp_lid-…) are private numbers WhatsApp uses
-  // when it hides someone's phone number. They are not phone numbers.
-  if (/^[a-z]+_lid[-_=]/i.test(local)) return null
+  // WhatsApp "linked IDs" (whatsapp_lid-…) hide the number; the WhatsApp bridge's map of
+  // them to real numbers is published by sky (server/lidmap.sh → setLidPhones).
+  const lid = /^[a-z]+_lid[-_=](\d+)/i.exec(local)
+  if (lid) return LID_PHONES[lid[1]] || null
   const digits = local.slice(local.indexOf('_') + 1).replace(/^(tel|sms)[_=]/, '').replace(/\D/g, '')
   return digits.length >= 8 ? digits : null
 }

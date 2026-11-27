@@ -140,6 +140,26 @@ services:
       ollama: { condition: service_started }
     profiles: [suggest]
 
+  # Voice messages → text (Whisper here on sky, then Claude fixes misheard words).
+  transcribe:
+    build: ./transcribe
+    image: local/inbox-transcribe
+    restart: unless-stopped
+    command: [python, /app/transcribe.py]
+    environment:
+      USER_ID: "@${ADMIN_USER}:${SERVER_NAME}"
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3-turbo}
+      CLAUDE_CODE_OAUTH_TOKEN: ${SUGGEST_CLAUDE_TOKEN:-}
+      CLAUDE_MODEL: ${SUGGEST_CLAUDE_MODEL:-sonnet}
+    volumes:
+      - ./transcribe/transcribe.py:/app/transcribe.py:ro
+      - ./data/synapse/doublepuppet.yaml:/app/doublepuppet.yaml:ro
+      - ./data/whisper:/models
+      - ${CLAUDE_VERSIONS_DIR:-/root/.local/share/claude/versions}:/opt/claude:ro
+    depends_on:
+      synapse: { condition: service_healthy }
+    profiles: [transcribe]
+
   # When you read a chat anywhere, its notifications disappear from the iPhone (silent push).
   readsync:
     image: python:3.12-slim

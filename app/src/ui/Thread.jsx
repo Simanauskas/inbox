@@ -294,7 +294,7 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
         {replyId && (
           <div className="quote">{quoted ? previewText(quoted, client.userId).replace(/^You: /, '') : 'Replying to an earlier message'}</div>
         )}
-        {ev.type === POLL_START ? <Poll client={client} room={room} ev={ev} votes={en.votes} onVote={onVote} /> : <MessageBody client={client} ev={ev} members={room?.members} />}
+        {ev.type === POLL_START ? <Poll client={client} room={room} ev={ev} votes={en.votes} onVote={onVote} /> : <MessageBody client={client} ev={ev} members={room?.members} room={room} />}
         <span className="meta">
           {ev.edited && 'edited · '}
           {time}
@@ -331,14 +331,14 @@ function Bubble({ ctx, en, mine, first, last, showNet, multi, showSender, status
   )
 }
 
-function MessageBody({ client, ev, members }) {
+function MessageBody({ client, ev, members, room }) {
   const c = ev.content || {}
   if (ev.redacted || ev.unsigned?.redacted_because) return <span className="muted"><i>Message deleted</i></span>
   if (ev.type === 'm.sticker') return <Img client={client} c={c} sticker />
   switch (c.msgtype) {
     case 'm.image': return <><Img client={client} c={c} />{caption(c)}</>
     case 'm.video': return <><Video client={client} c={c} />{caption(c)}</>
-    case 'm.audio': return <Audio client={client} c={c} />
+    case 'm.audio': return <><Audio client={client} c={c} /><Transcript client={client} room={room} ev={ev} /></>
     case 'm.file': return <FileLink client={client} c={c} />
     case 'm.location': return <a href={geoLink(c.geo_uri)} target="_blank" rel="noreferrer">📍 {c.body || 'Location'}</a>
     case 'm.emote': return <span className="text"><i>* {c.body}</i></span>
@@ -1019,6 +1019,25 @@ function RequestBanner({ ctx, item }) {
       <span><b>Message request</b> on {app}. They won't know you've seen it until you accept or reply.</span>
       <button className="text-btn inline" disabled={busy} onClick={async () => { setBusy(true); await client.acceptRequest(roomId).catch(() => {}); client.rooms[roomId].bridge.channel['com.beeper.message_request'] = false; setBusy(false) }}>Accept</button>
       <button className="text-btn inline danger" disabled={busy} onClick={async () => { if (confirm(`Delete this request on ${app}?`)) { await client.deleteChat(roomId, { fromRequest: true }).catch(() => {}); go('inbox') } }}>Delete</button>
+    </div>
+  )
+}
+
+// The voice message as text (sky transcribes new ones by itself; older ones on request).
+function Transcript({ client, room, ev }) {
+  const [open, setOpen] = useState(false)
+  if (!room || ev.local) return null
+  const t = room.transcripts?.t?.[ev.event_id]
+  const ask = (again) => (e) => { e.stopPropagation(); client.requestTranscript(room.id, ev.event_id, again).catch(() => {}) }
+  if (!t) return <button className="transcript-btn" onClick={ask(false)}>Transcribe</button>
+  if (t.pending) return <div className="transcript muted"><span className="spinner small" /> Transcribing…</div>
+  if (t.error) return <button className="transcript-btn" onClick={ask(true)}>Couldn't transcribe · Try again</button>
+  if (!t.text) return <div className="transcript muted">(no speech)</div>
+  const long = t.text.length > 220
+  return (
+    <div className="transcript" onClick={(e) => { if (long) { e.stopPropagation(); setOpen(!open) } }}>
+      {long && !open ? t.text.slice(0, 200) + '…' : t.text}
+      {(open || !long) && <button className="transcript-again" onClick={ask(true)}>Transcribe again</button>}
     </div>
   )
 }

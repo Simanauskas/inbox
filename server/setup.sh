@@ -41,8 +41,10 @@ profiles=$BRIDGES
 [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ] && profiles="$profiles tunnel"
 # your phone book for the app: iCloud contacts (or BlueBubbles on the Mac as a fallback)
 if [ -n "${ICLOUD_USER:-}" ] && [ -n "${ICLOUD_APP_PASSWORD:-}" ] || [ -n "${BLUEBUBBLES_PASSWORD:-}" ]; then profiles="$profiles contacts"; fi
-# reply suggestions in his style, from a small open-source model on this server (SUGGEST=1 in .env)
+# reply suggestions in his style (Claude, or a small open-source model as fallback) (SUGGEST=1 in .env)
 if [ "${SUGGEST:-}" = 1 ]; then profiles="$profiles suggest"; fi
+# voice messages → text with Whisper on this server (TRANSCRIBE=1 in .env)
+if [ "${TRANSCRIBE:-}" = 1 ]; then profiles="$profiles transcribe"; fi
 COMPOSE_PROFILES=$(echo $profiles | tr ' ' ',')
 setenv COMPOSE_PROFILES "$COMPOSE_PROFILES"
 export COMPOSE_PROFILES POSTGRES_PASSWORD
@@ -311,6 +313,8 @@ fi
 ( crontab -l 2>/dev/null | grep -v '/contacts.sh' ) | crontab - 2>/dev/null || true
 # keep push notifications reaching every device (see push-watchdog.sh)
 bash "$(dirname "$0")/push-watchdog.sh" --install >/dev/null 2>&1 || true
+# numbers behind WhatsApp's hidden IDs, for matching contacts (see lidmap.sh)
+bash "$(dirname "$0")/lidmap.sh" --install >/dev/null 2>&1 || true
 
 cat <<EOF
 

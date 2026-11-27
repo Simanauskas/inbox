@@ -9,7 +9,7 @@ const filter = (limit) => ({
     timeline: { limit },
     state: { lazy_load_members: true },
     ephemeral: { types: ['m.receipt', 'm.typing'] },
-    account_data: { types: ['m.fully_read', 'm.marked_unread', 'com.famedly.marked_unread', 'fit.simas.inbox.suggest', 'fit.simas.inbox.plan'] },
+    account_data: { types: ['m.fully_read', 'm.marked_unread', 'com.famedly.marked_unread', 'fit.simas.inbox.suggest', 'fit.simas.inbox.plan', 'fit.simas.inbox.transcripts'] },
   },
   presence: { not_types: ['*'] },
 })
@@ -207,7 +207,7 @@ export class Client {
       rooms.push({
         id: room.id, name: room.name, avatarUrl: room.avatarUrl, bridge: room.bridge, members: room.members,
         heroes: room.heroes, joinedCount: room.joinedCount, notificationCount: room.notificationCount, unreadCount: room.unreadCount || 0,
-        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, createTs: room.createTs, roomType: room.roomType || null, topic: room.topic || null, power: room.power || null, features: room.features ?? null, disappearing: room.disappearing || null,
+        receipts: room.receipts, fullyRead: room.fullyRead, markedUnread: !!room.markedUnread, suggest: room.suggest || null, plan: room.plan || null, transcripts: room.transcripts || null, createTs: room.createTs, roomType: room.roomType || null, topic: room.topic || null, power: room.power || null, features: room.features ?? null, disappearing: room.disappearing || null,
         timeline: events.slice(-CACHE_EVENTS_PER_ROOM),
         // a trimmed timeline can't continue from the old pagination token;
         // without one, the next "load older" starts from the newest and skips what it has
@@ -264,6 +264,7 @@ export class Client {
         if (ev.type === 'm.marked_unread' || ev.type === 'com.famedly.marked_unread') room.markedUnread = !!ev.content?.unread
         if (ev.type === 'fit.simas.inbox.suggest') room.suggest = ev.content // reply suggestions from the server
         if (ev.type === 'fit.simas.inbox.plan') room.plan = ev.content // a plan agreed in this chat (server/suggest)
+        if (ev.type === 'fit.simas.inbox.transcripts') room.transcripts = ev.content // voice messages as text (server/transcribe)
       }
     }
     // This is your own server and only the bridges can invite you, so accept every invite.
@@ -398,6 +399,19 @@ export class Client {
   }
 
   // --- what the apps can do, through the bridges (see room.features) ---
+
+  // Ask sky to transcribe a voice message (an older one, or again if the text was poor)
+  async requestTranscript(roomId, eventId, again = false) {
+    const room = this.rooms[roomId]
+    const path = `/_matrix/client/v3/user/${enc(this.userId)}/rooms/${enc(roomId)}/account_data/fit.simas.inbox.transcripts`
+    let doc = {}
+    try { doc = await this.api('GET', path) } catch {}
+    doc.t = { ...(doc.t || {}) }
+    doc.t[eventId] = { ...(doc.t[eventId] || {}), pending: true, ...(again ? { redo: true } : {}), at: Date.now() }
+    doc.requests = [...new Set([...(doc.requests || []), eventId])]
+    if (room) { room.transcripts = doc; this.emit() }
+    await this.api('PUT', path, doc)
+  }
 
   // Delete for everyone ("unsend")
   async redact(roomId, eventId) {

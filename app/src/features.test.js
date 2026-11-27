@@ -61,3 +61,11 @@ test('contacts: the same full name saved twice still matches (the fuller card)',
   assert.equal(contactMatch(idx, { names: ['Jonas Jonaitis'] })?.contact.id, 'b')
   assert.equal(contactMatch(idx, { names: ['Ona'] }), null)
 })
+
+test('WhatsApp hidden IDs get their number from the published map', async () => {
+  const { phoneFromUser, setLidPhones } = await import('./networks.js')
+  setLidPhones({ '12345678901234': '37061234567' })
+  assert.equal(phoneFromUser('@whatsapp_lid-12345678901234:x'), '37061234567')
+  assert.equal(phoneFromUser('@whatsapp_lid-999:x'), null)
+  setLidPhones({})
+})

@@ -1,6 +1,6 @@
 // Turns bridged rooms into people: one entry per person, however many apps
 // they message you on. Pure functions so they can be unit tested.
-import { networkOf, isBotUser, phoneFromUser, emailFromUser } from './networks.js'
+import { networkOf, isBotUser, phoneFromUser, emailFromUser, setLidPhones } from './networks.js'
 import { contactMatch } from './contacts.js'
 
 export const DEFAULT_CONFIG = { version: 1, people: {}, dismissed: [], replyWindowHours: 12, archived: {} }
@@ -199,6 +199,7 @@ export function normName(s) {
 // Name priority: a name you typed in Inbox > your phone book > what the app says.
 export function buildModel(rooms, accountData, me, rawConfig, contactIdx = null) {
   const config = normConfig(rawConfig)
+  setLidPhones(accountData?.['fit.simas.inbox.lidmap']?.map) // numbers behind WhatsApp's hidden IDs
   const direct = directRoomIds(accountData)
   const muted = mutedRoomIds(accountData)
   const info = {} // roomId -> { kind, network, title, remote, phone, lastTs }
@@ -608,6 +609,8 @@ export function previewText(ev, me, room = null, group = false) {
   if (ev.type === 'm.sticker') return you + 'Sticker'
   if (ev.type === POLL_START) return you + '📊 ' + (pollOf(ev)?.question || 'Poll')
   const c = ev.content || {}
+  const said = c.msgtype === 'm.audio' && room?.transcripts?.t?.[ev.event_id]?.text
+  if (said) return `${you}🎤 ${said}`
   const kinds = { 'm.image': '📷 Photo', 'm.video': '🎥 Video', 'm.audio': c['org.matrix.msc3245.voice'] ? '🎤 Voice message' : '🎵 Audio', 'm.file': '📎 ' + (c.body || 'File'), 'm.location': '📍 Location' }
   return you + (kinds[c.msgtype] || stripReply(c.body || ''))
 }

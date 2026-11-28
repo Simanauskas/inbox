@@ -36,6 +36,7 @@ POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "20"))
 POINTER = "fit.simas.inbox.contacts"
 REQUESTS = "fit.simas.inbox.contact_requests"
 RESULTS = "fit.simas.inbox.contact_results"
+AUTOREQ = "fit.simas.inbox.contact_requests_auto"  # from the people service (work, note, groups)
 
 
 def as_token():
@@ -451,21 +452,103 @@ def create_card(name, phones, emails):
     return "created"
 
 
+# --- iCloud groups (circles and tags from the people service) ---------------
+
+def card_uid(href):
+    status, _, data = dav("GET", href)
+    if status != 200:
+        raise RuntimeError(f"couldn't read the contact (HTTP {status})")
+    m = re.search(r"^UID:(.+)$", data.decode(), re.M | re.I)
+    if not m:
+        raise RuntimeError("the contact has no UID")
+    return m.group(1).strip()
+
+
+def group_cards():
+    """{name: (href, etag, text)} for the contact groups in the address book."""
+    query = ('<?xml version="1.0" encoding="utf-8"?><c:addressbook-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">'
+             "<d:prop><d:getetag/><c:address-data/></d:prop></c:addressbook-query>").encode()
+    status, _, data = dav("REPORT", BOOK, query, depth=1)
+    if status != 207:
+        raise RuntimeError(f"REPORT groups: HTTP {status}")
+    out = {}
+    for resp in ET.fromstring(data).findall("d:response", NS):
+        card = resp.find(".//c:address-data", NS)
+        if card is None or not card.text or "X-ADDRESSBOOKSERVER-KIND:group" not in card.text.replace("\r", ""):
+            continue
+        fn = re.search(r"^FN:(.*)$", card.text, re.M)
+        etag = resp.find(".//d:getetag", NS)
+        if fn:
+            out[unescape(fn.group(1).strip())] = (urllib.parse.urljoin(BOOK, resp.find("d:href", NS).text.strip()),
+                                                  etag.text if etag is not None else None, card.text)
+    return out
+
+
+_groups = {}  # group cards, read once per batch of requests
+
+
+def set_groups(href, groups, managed):
+    """Put the contact in exactly `groups` among the `managed` group names (other groups untouched)."""
+    uid = card_uid(href)
+    member = f"X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:{uid}"
+    if not _groups:
+        _groups.update(group_cards())
+    existing = _groups
+    changed = 0
+    for name in sorted(set(managed) | set(groups)):
+        want = name in groups
+        if name not in existing:
+            if not want:
+                continue
+            gid = str(uuid.uuid4()).upper()
+            text = "\r\n".join(["BEGIN:VCARD", "VERSION:3.0", f"UID:{gid}", f"N:{esc(name)};;;;", f"FN:{esc(name)}",
+                                 "X-ADDRESSBOOKSERVER-KIND:group", member, "END:VCARD"]) + "\r\n"
+            ghref = BOOK.rstrip("/") + f"/{gid}.vcf"
+            status, h, _ = dav("PUT", ghref, text.encode(), headers={"If-None-Match": "*"})
+            if status not in (200, 201, 204):
+                raise RuntimeError(f"iCloud refused the group {name} (HTTP {status})")
+            existing[name] = (ghref, h.get("ETag") or h.get("etag"), text)
+            changed += 1
+            continue
+        ghref, etag, text = existing[name]
+        entries = card_entries(text)
+        has = any(re.sub(r"\r\n[ \t]", "", e).strip().lower() == member.lower() for e in entries)
+        if want == has:
+            continue
+        if want:
+            end = max(i for i, e in enumerate(entries) if e.upper().startswith("END:VCARD"))
+            entries = entries[:end] + [member] + entries[end:]
+        else:
+            entries = [e for e in entries if re.sub(r"\r\n[ \t]", "", e).strip().lower() != member.lower()]
+        text = "\r\n".join(entries) + "\r\n"
+        status, h, _ = dav("PUT", ghref, text.encode(), headers={"If-Match": etag} if etag else {})
+        if status == 412:  # changed elsewhere meanwhile: read the groups again next time
+            _groups.clear()
+        if status not in (200, 201, 204):
+            raise RuntimeError(f"iCloud refused the change to {name} (HTTP {status})")
+        existing[name] = (ghref, h.get("ETag") or h.get("etag"), text)
+        changed += 1
+    return f"groups: {', '.join(groups) or 'none'}" + ("" if changed else " (no change)")
+
+
 def process_requests():
     if not (ICLOUD_USER and ICLOUD_PASS):
         return False
-    requests = account_data(REQUESTS).get("requests") or []
+    requests = (account_data(REQUESTS).get("requests") or []) + (account_data(AUTOREQ).get("requests") or [])
     results = account_data(RESULTS).get("results") or {}
     todo = [r for r in requests if r.get("rid") and r["rid"] not in results]
     if not todo:
         return False
     if BOOK is None:
         refresh()
+    _groups.clear()
     for r in todo:
         phones = [re.sub(r"\D", "", p) for p in r.get("phones") or [] if re.sub(r"\D", "", p)]
         emails = [e for e in r.get("emails") or [] if "@" in e]
         try:
-            if r.get("kind") == "edit" and r.get("href") and isinstance(r.get("changes"), dict):
+            if r.get("kind") == "groups" and r.get("href") and isinstance(r.get("groups"), list):
+                msg = set_groups(r["href"], [str(g) for g in r["groups"]], [str(g) for g in r.get("managed") or []])
+            elif r.get("kind") == "edit" and r.get("href") and isinstance(r.get("changes"), dict):
                 msg = edit_card(r["href"], r["changes"])
             elif r.get("kind") == "update" and r.get("href"):
                 msg = update_card(r["href"], phones, emails)
@@ -478,6 +561,11 @@ def process_requests():
         except Exception as e:  # report back to the app instead of failing the service
             results[r["rid"]] = {"ok": False, "message": str(e), "at": int(time.time() * 1000)}
             log(f"contact {r.get('kind')} failed: {e}")
+    # the people service's requests are done: take them off its queue (so they never run twice)
+    done = {r["rid"] for r in todo}
+    auto = account_data(AUTOREQ).get("requests") or []
+    if any(r.get("rid") in done for r in auto):
+        set_account_data(AUTOREQ, {"requests": [r for r in auto if r.get("rid") not in done]})
     # keep the newest 100 outcomes
     results = dict(sorted(results.items(), key=lambda kv: kv[1].get("at", 0))[-100:])
     set_account_data(RESULTS, {"results": results})

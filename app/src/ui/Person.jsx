@@ -12,6 +12,7 @@ import { PhoneBookCard, ContactDetails } from './PhoneBook.jsx'
 import { ListMembership } from './Lists.jsx'
 import GroupPage from './Group.jsx'
 import ChatSettings from './ChatSettings.jsx'
+import Profile from './Profile.jsx'
 
 export default function Person(props) {
   return props.item.kind === 'group' ? <GroupPage {...props} /> : <Contact {...props} />
@@ -108,6 +109,8 @@ function Contact({ ctx, item }) {
         {item.rooms.map((id) => <ChatSettings key={id} client={client} model={model} roomId={id} kind="dm" name={first} part="settings" />)}
 
         <About client={client} item={item} save={save} cfg={cfg} />
+
+        <Profile ctx={ctx} item={item} />
 
         <ul className="card-list wa-card">
           <li><button className="setting-row" onClick={() => setShowCard(!showCard)}>

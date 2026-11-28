@@ -64,7 +64,7 @@ export function openCard(s, appNames) {
 
 // With iCloud access the server writes the change: ask it via account data,
 // and read the outcome from the results it writes back.
-function requestChange(client, req) {
+export function requestChange(client, req) {
   const results = client.accountData[RESULTS_TYPE]?.results || {}
   const pending = (client.accountData[REQUESTS_TYPE]?.requests || []).filter((r) => !results[r.rid])
   const rid = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`

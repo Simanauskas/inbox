@@ -642,3 +642,35 @@ body.swiping .base-layer { filter: brightness(0.85); }
 .picker .list { overflow-x: hidden; overscroll-behavior: contain; }
 .picker .list .row { min-width: 0; max-width: 100%; }
 .picker .list .row-name { white-space: nowrap; }
+
+/* People: profile on the contact page, People page */
+.profile-card { display: flex; flex-direction: column; gap: 6px; }
+.profile-summary { color: var(--text); }
+.profile-label { font-size: 13px; color: var(--muted); margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+.sugg-mark { font-size: 11px; color: var(--accent); border: 1px dashed var(--accent); border-radius: 6px; padding: 0 5px; }
+.circle-chips, .tag-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.chip.on.suggested { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); border-style: dashed; }
+.strength-row { display: flex; gap: 12px; align-items: center; }
+.strength-row input[type=range] { flex: 1; accent-color: var(--accent); }
+.strength-n { font-size: 22px; font-weight: 650; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+.why-box { display: flex; gap: 8px; align-items: center; }
+.why-box input, .tag-input, .fact-input, .profile-field input { font: inherit; font-size: 15px; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; background: var(--bg); color: var(--text); min-width: 0; }
+.why-box input { flex: 1; }
+.tag-input { flex: 1; min-width: 140px; }
+.tag-chip { gap: 4px; }
+.tag-chip button { border: 0; background: none; padding: 0 0 0 2px; color: var(--muted); font-size: 16px; line-height: 1; }
+.profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 8px; }
+.profile-field { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); min-width: 0; }
+.profile-field:first-child { grid-column: 1 / -1; }
+.card-conflict { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+.fact-list > li { display: flex; flex-direction: column; }
+.fact-list .fact { display: flex; gap: 10px; align-items: baseline; padding: 11px 14px; text-align: left; width: 100%; background: none; border: 0; color: inherit; font: inherit; }
+.fact-list li.old .fact { color: var(--muted); }
+.fact-actions { display: flex; gap: 14px; padding: 0 14px 10px; }
+.fact-input { margin: 8px 10px; width: calc(100% - 20px); }
+.people-page .search { width: 100%; margin-top: 8px; }
+.person-row .row-top { gap: 8px; }
+.strength-pill { font-size: 12px; font-weight: 650; padding: 1px 7px; border-radius: 99px; background: var(--accent); color: #fff; flex: none; }
+.strength-pill.suggested { background: none; color: var(--accent); border: 1px dashed var(--accent); }
+.drift { font-size: 12px; color: #e8590c; margin-top: 3px; }

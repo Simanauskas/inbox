@@ -61,6 +61,7 @@ export default function Inbox({ ctx, selected }) {
             </button>
           ))}
           <button className="chip" onClick={() => go('lists')}>Lists{listCount ? <span className="chip-n">{listCount}</span> : null}</button>
+          <button className="chip" onClick={() => go('people')}>People</button>
           {archivedCount > 0 && (
             <button className={`chip ${filter === 'archived' ? 'on' : ''}`} onClick={() => setFilter(filter === 'archived' ? 'all' : 'archived')} aria-pressed={filter === 'archived'}>
               Archived{archivedUnread > 0 ? <span className="chip-n unread">{archivedUnread}</span> : <span className="chip-n">{archivedCount}</span>}

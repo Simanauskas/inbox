@@ -17,6 +17,8 @@ import { ListsPage, ListPage } from './ui/Lists.jsx'
 import { saveSessionForWorker, syncPush, closeNotifications, pushEnabled } from './push.js'
 import { idbGet, idbDel, idbSet } from './idb.js'
 import { indexContacts } from './contacts.js'
+import { CRM_TYPE, DIRECTORY_TYPE, directoryFrom, sameDirectory } from './crm.js'
+import PeoplePage from './ui/People.jsx'
 import { Icon } from './ui/common.jsx'
 import { back, go } from './router.js'
 
@@ -41,6 +43,26 @@ function usePhoneBook(client, url) {
     return () => { live = false }
   }, [client, url])
   return idx
+}
+
+// What the people service learned (circles, strength, work, facts): a private JSON file.
+function useCrm(client, url) {
+  const [crm, setCrm] = useState(null)
+  useEffect(() => {
+    let live = true
+    idbGet('crm').then(async (cached) => {
+      if (cached?.data && live) setCrm(cached.data)
+      if (!url || cached?.url === url) return
+      try {
+        const blobUrl = await client.mediaUrl(url, { download: true })
+        const data = await (await fetch(blobUrl)).json()
+        await idbSet('crm', { url, data })
+        if (live) setCrm(data)
+      } catch {}
+    })
+    return () => { live = false }
+  }, [client, url])
+  return crm
 }
 
 // Open the chat a notification was for (straight into the thread).
@@ -155,6 +177,16 @@ function Main({ session, onLogout }) {
     [version, contactIdx],
   )
   const sugg = useMemo(() => suggestions(model), [model])
+  const crm = useCrm(client, client.accountData[CRM_TYPE]?.url)
+  // tell the people service who is one person (and their contact card), when that changes
+  useEffect(() => {
+    if (!client.synced || !contactIdx) return
+    const t = setTimeout(() => {
+      const people = directoryFrom(model)
+      if (!sameDirectory(people, client.accountData[DIRECTORY_TYPE]?.people)) client.setAccountData(DIRECTORY_TYPE, { people }).catch(() => {})
+    }, 5000)
+    return () => clearTimeout(t)
+  }, [model, client.synced, contactIdx])
   // combine chats that are certainly the same person (same number / same contact card)
   const autoBusy = useRef(false)
   useEffect(() => {
@@ -264,7 +296,7 @@ function Main({ session, onLogout }) {
     return () => off()
   }, [client.synced])
 
-  const ctx = { client, model, sugg, findItem, wide, route, version, onLogout }
+  const ctx = { client, model, sugg, crm, findItem, wide, route, version, onLogout }
   const pageFor = (r, c = ctx) => {
     const it = r.arg ? findItem(r.arg) : null
     if (r.view === 't' && it) return <Thread key={it.key} ctx={c} item={it} />
@@ -274,6 +306,7 @@ function Main({ session, onLogout }) {
     if (r.view === 'settings') return <Settings ctx={c} />
     if (r.view === 'search') return <Search ctx={c} />
     if (r.view === 'lists') return <ListsPage ctx={c} />
+    if (r.view === 'people') return <PeoplePage ctx={c} />
     if (r.view === 'list' && r.arg) return <ListPage key={r.arg} ctx={c} id={r.arg} />
     if ((r.view === 't' || r.view === 'p') && !client.synced) return <div className="empty-pane"><div className="spinner" /></div>
     return null

@@ -27,6 +27,7 @@ setenv() {  # write KEY=VALUE into .env (replacing any existing line)
 }
 
 if [ -z "${POSTGRES_PASSWORD:-}" ]; then POSTGRES_PASSWORD=$(rand); setenv POSTGRES_PASSWORD "$POSTGRES_PASSWORD"; fi
+if [ -z "${PEOPLE_DB_PASSWORD:-}" ]; then PEOPLE_DB_PASSWORD=$(rand); setenv PEOPLE_DB_PASSWORD "$PEOPLE_DB_PASSWORD"; fi
 if [[ " $BRIDGES " == *" telegram "* ]] && [ -z "${TELEGRAM_API_ID:-}" ]; then
   echo "TELEGRAM_API_ID is empty, so Telegram is skipped for now (get keys at https://my.telegram.org/apps)."
   BRIDGES=$(echo " $BRIDGES " | sed 's/ telegram / /' | xargs)
@@ -42,7 +43,7 @@ profiles=$BRIDGES
 # your phone book for the app: iCloud contacts (or BlueBubbles on the Mac as a fallback)
 if [ -n "${ICLOUD_USER:-}" ] && [ -n "${ICLOUD_APP_PASSWORD:-}" ] || [ -n "${BLUEBUBBLES_PASSWORD:-}" ]; then profiles="$profiles contacts"; fi
 # reply suggestions in his style (Claude, or a small open-source model as fallback) (SUGGEST=1 in .env)
-if [ "${SUGGEST:-}" = 1 ]; then profiles="$profiles suggest"; fi
+if [ "${SUGGEST:-}" = 1 ]; then profiles="$profiles suggest people"; fi
 # voice messages → text with Whisper on this server (TRANSCRIBE=1 in .env)
 if [ "${TRANSCRIBE:-}" = 1 ]; then profiles="$profiles transcribe"; fi
 COMPOSE_PROFILES=$(echo $profiles | tr ' ' ',')
@@ -287,6 +288,15 @@ if [ -n "$synapse_was_running" ]; then
   docker compose restart synapse
   docker compose up -d --wait synapse
 fi
+
+# a read-only database user for the people service (reads messages, can't change anything)
+docker compose exec -T postgres psql -q -U synapse -d synapse -v pw="$PEOPLE_DB_PASSWORD" >/dev/null <<'SQL'
+SELECT format('CREATE ROLE inbox_reader LOGIN PASSWORD %L', :'pw') WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'inbox_reader') \gexec
+SELECT format('ALTER ROLE inbox_reader PASSWORD %L', :'pw') \gexec
+GRANT CONNECT ON DATABASE synapse TO inbox_reader;
+GRANT USAGE ON SCHEMA public TO inbox_reader;
+GRANT SELECT ON events, event_json, redactions TO inbox_reader;
+SQL
 
 if [ ! -f "$DATA/.admin-created" ]; then
   say "Creating your account @$ADMIN_USER:$SERVER_NAME"

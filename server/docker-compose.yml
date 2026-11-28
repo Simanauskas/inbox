@@ -140,6 +140,30 @@ services:
       ollama: { condition: service_started }
     profiles: [suggest]
 
+  # The people he knows (circles, connection strength, work, facts) learned from his chats
+  # every night, with his own corrections winning; iCloud cards/groups kept up to date
+  # through `contacts`. See people/people.py.
+  people:
+    build: ./people
+    image: local/inbox-people
+    restart: unless-stopped
+    command: [python, /app/people.py, --loop]
+    environment:
+      USER_ID: "@${ADMIN_USER}:${SERVER_NAME}"
+      PG_USER: inbox_reader
+      PG_PASSWORD: ${PEOPLE_DB_PASSWORD:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${SUGGEST_CLAUDE_TOKEN:-}
+      CLAUDE_MODEL: ${PEOPLE_CLAUDE_MODEL:-sonnet}
+      NIGHT_UTC: ${PEOPLE_NIGHT_UTC:-01:30}
+    volumes:
+      - ./people/people.py:/app/people.py:ro
+      - ${CLAUDE_VERSIONS_DIR:-/root/.local/share/claude/versions}:/opt/claude:ro
+      - ./data/synapse/doublepuppet.yaml:/app/doublepuppet.yaml:ro
+      - ./data/people:/state
+    depends_on:
+      synapse: { condition: service_healthy }
+    profiles: [people]
+
   # Voice messages → text (Whisper here on sky, then Claude fixes misheard words).
   transcribe:
     build: ./transcribe

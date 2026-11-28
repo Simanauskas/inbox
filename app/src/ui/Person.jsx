@@ -27,6 +27,7 @@ function Contact({ ctx, item }) {
   const [mediaCount, setMediaCount] = useState(null)
   useEffect(() => { if (document.activeElement?.getAttribute('aria-label') !== 'Name') setName(item.name) }, [item.name])
   const [picking, setPicking] = useState(false)
+  const [allGroups, setAllGroups] = useState(false)
   const [q, setQ] = useState('')
   const [err, setErr] = useState(null)
   const cfg = client.accountData[PEOPLE_TYPE]
@@ -161,13 +162,14 @@ function Contact({ ctx, item }) {
         {common.length > 0 && <>
           <h3 className="section">{common.length} {common.length === 1 ? 'group' : 'groups'} in common</h3>
           <ul className="card-list wa-card">
-            {common.slice(0, 8).map((g) => (
+            {(allGroups ? common : common.slice(0, 8)).map((g) => (
               <li key={g.key}><button className="member-row" onClick={() => go('t', g.key)}>
                 <Avatar client={client} mxc={g.avatarUrl} name={g.name} size={40} />
                 <span className="grow"><span className="member-name">{g.name}</span><span className="muted small">{memberNames(client, g)}</span></span>
                 <span className="chev">›</span>
               </button></li>
             ))}
+            {common.length > 8 && <li><button className="show-more" onClick={() => setAllGroups(!allGroups)}>{allGroups ? 'Show fewer' : `Show all ${common.length}`}</button></li>}
           </ul>
         </>}
 

@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { back } from '../router.js'
-import { TopBar, useMedia, Icon } from './common.jsx'
+import { TopBar, useMedia, usePhoto, Icon } from './common.jsx'
+import { LinkCard, urlsIn } from './LinkPreview.jsx'
 import { Viewer } from './Thread.jsx'
 
 const enc = encodeURIComponent
-const URL_RE = /https?:\/\/[^\s<>"]+/g
 
 // Photos, videos, files and links from all of a person's (or a group's) chats, newest
 // first, like WhatsApp's "Media, links and docs".
@@ -23,7 +23,7 @@ export async function loadMedia(client, roomIds, { pages = 1, limit = 100 } = {}
         if (ev.unsigned?.redacted_because) continue
         if (['m.image', 'm.video'].includes(c.msgtype) && c.url) out.push({ kind: 'media', ev, roomId: id })
         else if (c.msgtype === 'm.file' && c.url) out.push({ kind: 'doc', ev, roomId: id })
-        else if (c.msgtype === 'm.text') for (const u of (c.body || '').match(URL_RE) || []) out.push({ kind: 'link', url: u, ev, roomId: id })
+        else if (c.msgtype === 'm.text') for (const u of urlsIn(c.body)) out.push({ kind: 'link', url: u, ev, roomId: id })
       }
       from = res.end
       if (!from || !(res.chunk || []).length) break
@@ -55,12 +55,15 @@ export default function MediaPage({ ctx, item }) {
         {tab === 'media' && <div className="media-grid">{shown.map((x) => <Thumb key={x.ev.event_id} client={client} c={x.ev.content} onOpen={() => setView(x.ev.content)} />)}</div>}
         {tab === 'doc' && <ul className="card-list">{shown.map((x) => <Doc key={x.ev.event_id} client={client} x={x} />)}</ul>}
         {tab === 'link' && (
-          <ul className="card-list">
+          <ul className="card-list links-list">
             {shown.map((x, i) => (
-              <li key={x.ev.event_id + i} className="setting-row">
-                <Icon name="link" size={18} />
-                <a className="grow link-row" href={x.url} target="_blank" rel="noreferrer">{x.url.replace(/^https?:\/\//, '')}</a>
-                <span className="muted small">{new Date(x.ev.origin_server_ts).toLocaleDateString()}</span>
+              <li key={x.ev.event_id + i}>
+                <LinkCard client={client} content={x.ev.content} url={x.url} compact />
+                <span className="link-meta">
+                  <Icon name="link" size={16} />
+                  <a className="grow link-row" href={x.url} target="_blank" rel="noreferrer">{x.url.replace(/^https?:\/\//, '')}</a>
+                  <span className="muted small">{new Date(x.ev.origin_server_ts).toLocaleDateString()}</span>
+                </span>
               </li>
             ))}
           </ul>
@@ -72,11 +75,28 @@ export default function MediaPage({ ctx, item }) {
 }
 
 function Thumb({ client, c, onOpen }) {
-  const url = useMedia(client, c.info?.thumbnail_url || (c.msgtype === 'm.image' ? c.url : null), 320)
+  return c.msgtype === 'm.image' ? <PhotoThumb client={client} c={c} onOpen={onOpen} /> : <VideoThumb client={client} c={c} />
+}
+
+function PhotoThumb({ client, c, onOpen }) {
+  const { url, gone } = usePhoto(client, c, 320)
+  const [bad, setBad] = useState(false) // this browser can't draw it (HEIC outside Safari)
   return (
-    <button className="media-cell" onClick={c.msgtype === 'm.image' ? onOpen : () => client.mediaUrl(c.url, { download: true })?.then((u) => window.open(u, '_blank'))}>
-      {url ? <img src={url} alt="" /> : <span className="media-cell-icon">{c.msgtype === 'm.video' ? '🎥' : '📷'}</span>}
-      {c.msgtype === 'm.video' && <span className="media-cell-badge">▶</span>}
+    <button className="media-cell" onClick={gone ? undefined : onOpen} disabled={gone}>
+      {url && !bad ? <img src={url} alt="" onError={() => setBad(true)} />
+        : gone ? <span className="media-cell-gone">Photo no longer on the server</span>
+        : bad ? <span className="media-cell-gone">HEIC photo — open to view</span>
+        : <span className="spinner small" />}
+    </button>
+  )
+}
+
+function VideoThumb({ client, c }) {
+  const url = useMedia(client, c.info?.thumbnail_url, 320)
+  return (
+    <button className="media-cell" onClick={() => client.mediaUrl(c.url, { download: true })?.then((u) => window.open(u, '_blank'))}>
+      {url ? <img src={url} alt="" /> : <span className="media-cell-icon">🎥</span>}
+      <span className="media-cell-badge">▶</span>
     </button>
   )
 }

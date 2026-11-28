@@ -29,6 +29,27 @@ export function useMedia(client, mxc, width) {
   return url
 }
 
+// A photo for a bubble or a grid tile. Synapse can only shrink JPEG/PNG/WebP/GIF, so
+// iPhone HEIC photos have no small version: fall back to the original (the iPhone and
+// Safari show HEIC). `gone` = the file isn't on the server at all (404).
+export function usePhoto(client, c, width) {
+  const small = c.info?.thumbnail_url || c.url
+  const cached = () => client.mediaCached?.(small, { width }) || client.mediaCached?.(c.url, { download: true }) || null
+  const [st, setSt] = useState(() => ({ url: cached(), gone: false }))
+  useEffect(() => {
+    let live = true
+    const hit = cached()
+    if (hit) { setSt({ url: hit, gone: false }); return }
+    setSt({ url: null, gone: false })
+    const thumb = client.mediaUrl(small, { width, height: width }) || Promise.reject(new Error('0'))
+    thumb.catch((e) => (e.message === '404' && small === c.url ? Promise.reject(e) : client.mediaUrl(c.url, { download: true }) || Promise.reject(e)))
+      .then((u) => live && setSt({ url: u, gone: false }))
+      .catch((e) => live && setSt({ url: null, gone: true, status: e.message }))
+    return () => { live = false }
+  }, [client, small, c.url, width])
+  return st
+}
+
 export function NetBadge({ net, label = false, title }) {
   const n = networkInfo(net)
   return (

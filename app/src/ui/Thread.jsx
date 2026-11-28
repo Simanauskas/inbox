@@ -7,8 +7,9 @@ import { go, back } from '../router.js'
 import { chooseChannel, mergedTimeline, stripReply, previewText, cleanName, deliveryStatus, normConfig, canEdit, canDelete, pollOf, tallyPoll, POLL_START } from '../people.js'
 import { markdownToHtml, mentionQuery } from '../format.js'
 import Rich, { hasRichFormatting } from './Rich.jsx'
+import { LinkCard, urlsIn } from './LinkPreview.jsx'
 import { networkInfo } from '../networks.js'
-import { Avatar, NetBadge, TopBar, Icon, useMedia, ago, identityOf } from './common.jsx'
+import { Avatar, NetBadge, TopBar, Icon, useMedia, usePhoto, ago, identityOf } from './common.jsx'
 import { ContactPrompt } from './PhoneBook.jsx'
 import { InviteBanner, PlanBanner } from './Lists.jsx'
 import { EMOJI_GRID, quickReactions, splitEmojis, reactionsFor, allowedReaction } from '../emoji.js'
@@ -342,7 +343,11 @@ function MessageBody({ client, ev, members, room }) {
     case 'm.file': return <FileLink client={client} c={c} />
     case 'm.location': return <a href={geoLink(c.geo_uri)} target="_blank" rel="noreferrer">📍 {c.body || 'Location'}</a>
     case 'm.emote': return <span className="text"><i>* {c.body}</i></span>
-    default: return hasRichFormatting(c) ? <Rich html={c.formatted_body} members={members} /> : <span className="text">{linkify(stripReply(c.body || ''))}</span>
+    default: {
+      const text = hasRichFormatting(c) ? <Rich html={c.formatted_body} members={members} /> : <span className="text">{linkify(stripReply(c.body || ''))}</span>
+      const url = c.msgtype === 'm.text' || !c.msgtype ? urlsIn(stripReply(c.body || ''))[0] : null
+      return url ? <>{text}<LinkCard client={client} content={c} url={url} /></> : text
+    }
   }
 }
 
@@ -353,11 +358,12 @@ function caption(c) {
 }
 
 function Img({ client, c, sticker }) {
-  const thumb = useMedia(client, c.info?.thumbnail_url || c.url, 640)
+  const { url: thumb, gone } = usePhoto(client, c, 640)
   const [view, setView] = useState(false)
   const w = c.info?.w || 320
   const h = c.info?.h || 240
   const ratio = Math.min(1, (sticker ? 160 : 280) / w)
+  if (gone) return <span className="media gone">Photo no longer on the server</span>
   return (
     <>
       <button className={`media ${sticker ? 'sticker' : ''}`} style={{ width: w * ratio, aspectRatio: `${w} / ${h}` }}

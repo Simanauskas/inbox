@@ -100,7 +100,8 @@ def set_account_data(kind, content):
 
 def media_json(mxc):
     server, mid = mxc[6:].split("/", 1)
-    return json.loads(matrix("GET", f"/_matrix/client/v1/media/download/{q(server)}/{q(mid)}", timeout=120))
+    out = matrix("GET", f"/_matrix/client/v1/media/download/{q(server)}/{q(mid)}", timeout=120)
+    return out if isinstance(out, dict) else json.loads(out)
 
 
 # --- local state -------------------------------------------------------------
@@ -465,7 +466,9 @@ def icloud(c, people_out, edits, contacts_by_href):
         if block and note != (d.get("note") or "").strip():
             changes["note"] = note
         p["card"] = {"conflicts": conflicts}
-        groups = sorted({GROUP_OF[f["circle"]]} if f.get("circle") in GROUP_OF else set()) + sorted({t.capitalize() for t in f.get("tags") or []})
+        # groups only once he has set or confirmed the circle (suggestions stay in Inbox)
+        groups = (sorted({GROUP_OF[e["circle"]]} if e.get("circle") in GROUP_OF else set())
+                  + sorted({t.capitalize() for t in f.get("tags") or []})) if e.get("circle") else []
         managed = sorted(set(GROUP_OF.values()) | set((sent.get(href) or {}).get("groups") or []) | set(groups))
         last = sent.get(href) or {}
         stamp = int(time.time() * 1000)
@@ -473,7 +476,7 @@ def icloud(c, people_out, edits, contacts_by_href):
             reqs.append({"rid": f"people-{cid[:12]}-{stamp}-c", "kind": "edit", "href": href, "changes": changes, "at": stamp})
             last["changes"] = changes
             n += 1
-        if last.get("groups") != groups:
+        if last.get("groups", []) != groups:
             reqs.append({"rid": f"people-{cid[:12]}-{stamp}-g", "kind": "groups", "href": href, "groups": groups, "managed": managed, "at": stamp})
             last["groups"] = groups
             n += 1

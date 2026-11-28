@@ -112,6 +112,20 @@ web / iPhone app ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ W
   sky) + Claude fixes misheard words; progress % and seconds left shown in the chat.
 - Local ollama models unload quickly (only fallbacks now), leaving ~7 GB free for Whisper.
 
+## People (personal CRM, from 28 Nov)
+
+- Service `people` (`server/people/people.py`, profile `people`, on with SUGGEST=1): nightly 01:30 UTC
+  reads the day's DMs straight from Synapse's DB as read-only role `inbox_reader`
+  (`PEOPLE_DB_PASSWORD`), asks Claude per person → `data/people/people.db`, published as a JSON file
+  (account data `fit.simas.inbox.crm`). His edits: `fit.simas.inbox.crm_edits` (always win; `why`
+  reasons fed back as corrections). Who-is-who comes from the app: `fit.simas.inbox.directory`.
+- Circles: partner, family, close friend, friend, colleague, former colleague, client, acquaintance,
+  service. **Tennis etc. are tags**, not circles. Strength 0–100 suggested; he corrects.
+- iCloud (via `contacts`, queue `fit.simas.inbox.contact_requests_auto`): org/title only where the card
+  is empty, conflicts asked in the app; an "— Inbox —" block in the note; groups per circle + tag.
+- App: contact page "How you know …" + facts; People page (Inbox chip "People") with Lost touch.
+- **Full-history `--backfill` waits until the Messenger export (and LinkedIn archive) are imported.**
+
 ## Server, bridges, history (details in `references/server.md`)
 
 - WhatsApp hides many numbers behind linked IDs: `server/lidmap.sh` (cron) publishes the bridge's

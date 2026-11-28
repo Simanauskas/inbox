@@ -147,3 +147,4 @@ under the player; previews show "🎤 <text>".
 `server/lidmap.sh` (cron 30 min, setup.sh) publishes the bridge's `whatsmeow_lid_map` as account data
 `fit.simas.inbox.lidmap` {map: {lid: number}}; `buildModel` → `setLidPhones` → `phoneFromUser` gives
 `@whatsapp_lid-…` ghosts their real number (contact matching, merging, calls, groups in common).
+- HEIC photos (iPhone) are converted to JPEG in the app before sending (matrix.js heicToJpeg, ≤4096 px): WhatsApp's bridge rejects image/heic and Synapse can't thumbnail it.

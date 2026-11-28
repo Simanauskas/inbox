@@ -550,6 +550,8 @@ export class Client {
 
   // caption: text sent with the photo/file (shown under it, like WhatsApp)
   async sendFile(roomId, file, caption = '') {
+    // iPhone photos are HEIC, which WhatsApp (and sky's previews) can't take: send a JPEG
+    if (isHeic(file)) file = await heicToJpeg(file).catch(() => file)
     const url = await this.upload(file)
     const info = { mimetype: file.type, size: file.size }
     let msgtype = 'm.file'
@@ -768,6 +770,28 @@ export function isEdit(ev) {
 
 const enc = encodeURIComponent
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+function isHeic(file) {
+  return /^image\/hei[cf]/i.test(file.type || '') || (!file.type && /\.hei[cf]$/i.test(file.name || ''))
+}
+
+// Decode a HEIC photo (Safari / the iPhone can) and re-encode it as JPEG, at most 4096 px on
+// the long side (iOS canvases refuse very large images; it's also quicker to send).
+async function heicToJpeg(file) {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = new Image()
+    img.src = url
+    await img.decode()
+    const scale = Math.min(1, 4096 / Math.max(img.naturalWidth, img.naturalHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(img.naturalWidth * scale)
+    canvas.height = Math.round(img.naturalHeight * scale)
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', 0.88))
+    return new File([blob], (file.name || 'photo').replace(/\.hei[cf]$/i, '') + '.jpg', { type: 'image/jpeg' })
+  } finally { URL.revokeObjectURL(url) }
+}
 
 function imageSize(file) {
   return new Promise((resolve, reject) => {

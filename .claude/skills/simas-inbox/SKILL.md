@@ -42,7 +42,7 @@ feature.** When a bridge offers something (`com.beeper.room_features`), build it
 web / iPhone app ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ WhatsApp / Telegram / Messenger / Instagram
                                │     ◀─▶ mautrix-imessage ─▶ BlueBubbles on the Air ─▶ iMessage + SMS
                                ├─▶ Sygnal ─▶ web push (Mac, browsers) + APNs (iPhone app)
-                               └── services as @s: suggest (+ollama), readsync, contacts
+                               └── services as @s: suggest (+ollama), transcribe (Whisper), readsync, contacts
 ```
 
 - **No backend of its own for chat**: the app is a thin Matrix client (`app/src/matrix.js`); rooms are
@@ -73,12 +73,15 @@ web / iPhone app ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ W
 - **Chat**: long-press/right-click → reactions (Telegram mapped to its allowed set) + Reply · Edit ·
   Forward · Copy · Delete-for-everyone (finger-sized, labelled). ↑ on the Mac edits the last message.
   Formatting (*bold* _italic_ ~strike~ `code` > quote) both ways, @mentions in groups, polls (vote +
-  create), location, voice notes (1×/1.5×/2×), photos full screen (pinch/double-tap zoom, swipe down),
-  paste/drag files, plan banner "Add to calendar", reply-suggestion chips (Mac: ⇥ Tab).
+  create), location, voice notes (player with progress line, 1×/1.5×/2×, **transcribed to text**),
+  photos full screen (pinch/double-tap zoom, swipe down), HEIC → JPEG before sending, paste/drag
+  files, plan banner "Add to calendar", reply-suggestion chips (Mac: ⇥ Tab).
 - **Ticks**: ✓ on sky, ✓✓ delivered, coloured ✓✓ seen (no "Seen" text).
-- **Contact / group pages**: full contact card, learned "About" note, Lists, apps + default, chat
-  settings (disappearing messages, block, delete chat, group photo), group members (message / add to
-  contacts / remove, add members, invite link, rename, leave), reaction-notification switch per group.
+- **Contact page (WhatsApp-style)**: big photo, name, number, Chat · Call · Mute, Media/links/docs page,
+  notifications, pin, disappearing messages, About (learned note), contact card, apps, groups in common,
+  Lists, Block / Delete. **Group page**: members (message / add to contacts / remove), add members,
+  invite link, rename, photo, reactions switch, leave.
+- **iPhone share sheet**: "Inbox" share extension + people suggestions (message intents) — see features.md.
 - **Inbox**: two filter rows (All · Unread · Groups · Lists · Archived / app badges), swipe or
   right-click → Pin · Mute · Read/Unread · Archive, message requests (Accept / Delete), Lists with
   invites ("Ačiū, jau susitariau - kitą kartą! 🎾").
@@ -104,10 +107,15 @@ web / iPhone app ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ W
   diacritics** or English, his tone from `data/suggest/style.md` (server only) + a note per person.
 - Learned notes (`fit.simas.inbox.profiles`): who each person is to him + category, from his chats.
 - Token watch: daily check, alert + Settings card + top bar when it fails or nears its year.
-- Plans agreed in chats → "Add to calendar" (Apple Calendar "Simanauskas | Personal").
+- Plans agreed in chats (Claude) → "Add to calendar" (Apple Calendar "Simanauskas | Personal").
+- **Voice messages → text**: service `transcribe` — Whisper large-v3-turbo on sky (audio never leaves
+  sky) + Claude fixes misheard words; progress % and seconds left shown in the chat.
+- Local ollama models unload quickly (only fallbacks now), leaving ~7 GB free for Whisper.
 
 ## Server, bridges, history (details in `references/server.md`)
 
+- WhatsApp hides many numbers behind linked IDs: `server/lidmap.sh` (cron) publishes the bridge's
+  lid→number map so those chats match contacts. Same full name on several iCloud cards = one person.
 - Own patched bridge builds on sky (`.env` image overrides): Messenger (deep encrypted history),
   iMessage (full history, real dates, voice notes as ALAC CAF), WhatsApp (online-while-viewing hook).
 - History can only be added when a bridge **creates** a chat. Refill = rebuild the chat, or
@@ -138,7 +146,8 @@ web / iPhone app ──HTTPS──▶ Synapse ◀─▶ mautrix bridges ─▶ W
 
 ## Open items
 
-- Facebook/Messenger data export import (requested 26 Nov; waiting for his files).
+- Facebook/Messenger data export import (he requested the download 26 Nov; files go to
+  `/root/server/imports/`, then import into the matching chats with original dates).
 - Not built: GIF/sticker picker, view-once media, starred messages, grouping by learned categories,
   recent-photos grid. iMessage stays basic (no edit/delete/polls: Air on Big Sur, Private API off).
 - Rotate the App Store Connect API key (advised).
